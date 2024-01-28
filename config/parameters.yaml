@@ -1,0 +1,41 @@
+hydra:
+  run:
+    dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+model_dir: models
+
+original_dataset_path: ~/workspace/nsrr/shhs/polysomnography/
+creation_dataset_name: ~/workspace/nsrr/data/dataset.h5
+
+verbose: True
+
+datasets: ['shhs2']  #datasets: ['shhs1', 'shhs2']
+
+# https://github.com/nsrr/edf-editor-translator/blob/master/configuration/nsrr-psg-events-compumedics-mapping.csv
+annotation_labels: ['Wake', 'Stage 1 sleep', 'Stage 2 sleep', 'Stage 3 sleep', 'Stage 4 sleep', 'REM sleep']
+channel_labels: ['SaO2', 'THOR RES', 'ABDO RES', 'AIRFLOW']
+
+output_shhs_datainfo_csv: False  # set True when first run
+debug_plots_interval: None  # 200000
+random_state: 123
+in_channels: 4
+train_size: 0.8
+lr: 5e-4
+num_epoch: 1000
+batch_size: 96
+num_train_step: 100
+save_itvl: 50
+eval_itvl: 5
+
+
+gpu:
+  train: 0
+  eval: 1
+
+# for evaluation
+trained_model_file: test.pt
+
+wandb:
+  project: nsrr
+  group: sleep-stage
+  name: trial
+  cwd: current_work_directory

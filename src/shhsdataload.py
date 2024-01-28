@@ -19,13 +19,12 @@ class ShhsDataLoader:
         self.xml_files = []
         self.interpolator = Interpolator.get_instance(interp)
         self.normalizer = Normalizer.get_instance(norm)
-        self.epoch_labels = ['Wake', 'Stage 1 sleep', 'Stage 2 sleep', 'Stage 3 sleep', 'Stage 4 sleep', 'REM sleep']
         self.duration = 30.0
 
         get_all_files = lambda path, pattern: glob.glob(os.path.join(path, '**', pattern), recursive=True)
         for dataset in datasets:
-            edf_path = os.path.join(base_path, "edfs", dataset)
-            xml_path = os.path.join(base_path, "annotations-events-" + annot, dataset)
+            edf_path = os.path.expanduser(os.path.join(base_path, "edfs", dataset))
+            xml_path = os.path.expanduser(os.path.join(base_path, "annotations-events-" + annot, dataset))
             edf_files = get_all_files(edf_path, '*.edf')
             xml_files = get_all_files(xml_path, '*.xml')
 
@@ -85,7 +84,7 @@ class ShhsDataLoader:
                     duration = event.find('Duration')
 
                     increment_count = 1
-                    if duration is not None and concept in self.epoch_labels:
+                    if duration is not None and concept in self.annotation_labels:
                         duration_value = float(duration.text)
                         if duration_value % 30.0 == 0:
                             increment_count = int(duration_value / 30.0)
@@ -113,15 +112,18 @@ class ShhsDataLoader:
 
         print(f"[INFO] create {output_file}")
 
-    def create_target_dataset_h5(self, channel_labels, target_fs, creation_info_filename='dataset.h5', debug_plots_interval=None):
+    def create_target_fs_dataset_h5(self, channel_labels, target_fs=None, creation_filename='dataset.h5', debug_plots_interval=None):
         total_count = 0
         self.channel_labels = channel_labels
         self.annotation_counts = {label: 0 for label in self.annotation_labels}
 
-        with h5py.File(creation_info_filename, 'w') as hf:
-            hf.create_dataset(f"channels", data=self.channel_labels)
-            hf.create_dataset(f"target_fs", data=target_fs)
-            hf.create_dataset(f"annotation_labels", data=self.annotation_labels)
+        with h5py.File(creation_filename, 'w') as hf:
+            dt_str = h5py.special_dtype(vlen=str)  # for save str in h5
+            dt_float = h5py.special_dtype(vlen=np.dtype('float64'))  # for save variable length signals in h5
+
+            hf.create_dataset(f"channels", data=self.channel_labels, dtype=dt_str)
+            hf.create_dataset(f"target_fs", data=target_fs, dtype=dt_str)
+            hf.create_dataset(f"annotation_labels", data=self.annotation_labels, dtype=dt_str)
 
             for edf_file, xml_file in tqdm(zip(self.edf_files, self.xml_files), total=len(self.edf_files), desc="Processing files"):
                 has_edf_all_target_channnels, fs_channels, signals = self.__load_edf_file_target_channel(edf_file)
@@ -132,8 +134,11 @@ class ShhsDataLoader:
 
                 for (signal, label) in zip(signal_list, label_list):
                     dataset_name = f"shhs{total_count}"
-                    hf.create_dataset(f"{dataset_name}/data", data=signal)
-                    hf.create_dataset(f"{dataset_name}/labels", data=label)
+                    hf.create_dataset(f"{dataset_name}/label", data=label)
+                    # write variable length signals
+                    datasignal = hf.create_dataset(f"{dataset_name}/signal", (len(signal),), dtype=dt_float)
+                    for i, s in enumerate(signal):
+                        datasignal[i] = s
                     total_count += 1
 
             if self.verbose:
@@ -156,24 +161,28 @@ class ShhsDataLoader:
             durations = float(event.find('Duration').text)
 
             if annotation in self.annotation_labels:
-                # found target data
-                is_enough_length, extracted_signals = self.__extract_data(fs_channels, signals, start_time, durations)
-                if is_enough_length is False:
-                    continue
 
-                interpolated_signals = self.__interpolate_data(fs_channels, extracted_signals, self.duration, target_fs)
-                normalized_signals = [self.normalizer.normalize(signal) for signal in interpolated_signals]
+                num_iterations = int(durations / self.duration)
 
-                label_idx = self.annotation_labels.index(annotation)
-                label_list.append(label_idx)
-                signal_list.append(normalized_signals)
+                for count in range(num_iterations):
+                    extracted_signals = self.__extract_data(fs_channels, signals, start_time, count)
 
-                # for confirm result
-                self.annotation_counts[annotation] += 1  # for verbose
-                debug_plotter = PreprocessResultPlotter(debug_plots_interval, debug_total_count, self.channel_labels)
-                debug_plotter.add_plot_data(fs_channels, target_fs, self.duration, annotation, extracted_signals, interpolated_signals, normalized_signals)
-                debug_plotter.plot_and_save()
-                debug_total_count += 1
+                    if target_fs is None:
+                        after_fs_signals = extracted_signals
+                    else:
+                        after_fs_signals = self.__interpolate_data(fs_channels, extracted_signals, self.duration, target_fs)
+                    normalized_signals = [self.normalizer.normalize(signal) for signal in after_fs_signals]
+
+                    label_idx = self.annotation_labels.index(annotation)
+                    label_list.append(label_idx)
+                    signal_list.append(normalized_signals)
+
+                    # to confirm result
+                    self.annotation_counts[annotation] += 1  # for verbose
+                    debug_plotter = PreprocessResultPlotter(debug_plots_interval, debug_total_count, self.channel_labels)
+                    debug_plotter.add_plot_data(fs_channels, target_fs, self.duration, annotation, extracted_signals, after_fs_signals, normalized_signals)
+                    debug_plotter.plot_and_save()
+                    debug_total_count += 1
 
         return signal_list, label_list
 
@@ -195,31 +204,26 @@ class ShhsDataLoader:
 
             return True, fs, signals
 
-    def __extract_data(self, fs_channels, signals, start_time, durations):
+    def __extract_data(self, fs_channels, signals, start_time, count):
         extracted_data = []
-        num_iterations = int(durations / self.duration)
+        
+        for idx, fs in enumerate(fs_channels):
+            start_idx = int(fs * (start_time + count * self.duration))
+            end_idx = start_idx + int(fs * (self.duration))
 
-        for iteration in range(num_iterations):
-            for idx, fs in enumerate(fs_channels):
-                # Calculate the start and end indices for the current iteration
-                start_idx = int(fs * (start_time + iteration * self.duration))
-                end_idx = start_idx + int(fs * (self.duration + 1))
+            if len(signals[idx]) < end_idx:
+                print('duration is larger than the data length')
+                break
 
-                signal = signals[idx]
+            # extract data of the specified channel for the duration range
+            data = signals[idx][start_idx:end_idx]
+            extracted_data.append(data)
 
-                if len(signal) < end_idx:
-                    # duration is larger than the data length
-                    return False, None
-
-                # extract data of the specified channel for the duration range
-                data = signal[start_idx:end_idx]
-                extracted_data.append(data)
-
-        return True, extracted_data
+        return extracted_data
 
     def __interpolate_data(self, fs_channels, extracted_data, duration, target_fs):
         interpolated_data = []
-        resampled_time = np.linspace(0, duration, int(target_fs * (duration + 1)))
+        resampled_time = np.linspace(0, duration, int(target_fs * duration))
 
         for data, fs in zip(extracted_data, fs_channels):
             time = np.arange(len(data)) / fs
@@ -230,7 +234,7 @@ class ShhsDataLoader:
 
 class PreprocessResultPlotter:
     def __init__(self, plots_interval, total_count, channel_labels):
-        if plots_interval is None or (total_count % plots_interval != 0):
+        if plots_interval is None or not isinstance(plots_interval, int):
             self.is_plot = False
         else:
             self.is_plot = True
@@ -249,7 +253,8 @@ class PreprocessResultPlotter:
         self.time = [np.arange(len(data)) / fs for data, fs in zip(extracted_signals, fs_channels)]
         self.interpolated_signals = interpolated_signals
         self.normalized_signals = normalized_signals
-        self.resampled_time = np.linspace(0, duration, int(target_fs * (duration + 1)))
+        if target_fs is not None:
+            self.resampled_time = np.linspace(0, duration, int(self.target_fs * duration))
 
     def plot_and_save(self, output_format='png', dirname='debug_plot'):
         if not self.is_plot:
@@ -275,13 +280,18 @@ class PreprocessResultPlotter:
         for i in range(n_channels):
             # Original Data and Interpolated Data plots
             axs[i, 0].plot(self.time[i], self.extracted_data[i], label='Original Data')
-            axs[i, 0].plot(self.resampled_time, self.interpolated_signals[i], label='Interpolated Data', linestyle='--')
+            if self.target_fs is None:
+                time = self.time[i]
+            else:
+                time = self.resampled_time
+            axs[i, 0].plot(time, self.interpolated_signals[i], label='Interpolated Data', linestyle='--')
             axs[i, 0].set_title(f"Channel: {self.channel_labels[i]} (fs: {self.fs_channels[i]} Hz)")
             axs[i, 0].legend(loc='upper right')
 
             # Normalized Signal plots
-            axs[i, 1].plot(self.resampled_time, self.normalized_signals[i], label='Normalized Signal')
-            axs[i, 1].set_title(f"Channel: {self.channel_labels[i]} Normalized (fs: {self.target_fs} Hz)")
+            axs[i, 1].plot(time, self.normalized_signals[i], label='Normalized Signal')
+            if self.target_fs is not None:
+                axs[i, 1].set_title(f"Channel: {self.channel_labels[i]} Normalized (fs: {self.target_fs} Hz)")
             axs[i, 1].legend(loc='upper right')
 
         fig.suptitle(f"Annotation: {self.annotation}, Total count: {self.total_count}")
@@ -289,21 +299,5 @@ class PreprocessResultPlotter:
 
         # Save the plot inside the specified directory
         save_path = os.path.join(dirname, f"debug_plot_{self.total_count}.{output_format}")
-        plt.savefig(save_path, dpi=200)
+        plt.savefig(save_path, dpi=300)
         plt.close()
-
-
-def main():
-    # https://github.com/nsrr/edf-editor-translator/blob/master/configuration/nsrr-psg-events-compumedics-mapping.csv
-    annotation_labels = ['Wake', 'Stage 1 sleep', 'Stage 2 sleep', 'Stage 3 sleep', 'Stage 4 sleep', 'REM sleep']
-    channel_labels = ['SaO2', 'THOR RES', 'ABDO RES', 'AIRFLOW']
-
-    #shhs = ShhsDataLoader(annotation_labels, output_csv=True)
-    shhs = ShhsDataLoader(annotation_labels, datasets=['shhs1'], output_csv=False)
-    shhs.create_target_dataset_h5(channel_labels, target_fs=128.0, debug_plots_interval=10000)
-
-    #run(annotation_labels, channel_labels, dataset)
-
-
-if __name__ == '__main__':
-    main()

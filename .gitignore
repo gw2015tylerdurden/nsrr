@@ -1,0 +1,7 @@
+/outputs/
+/shhs/
+/data/
+*/__pycache__/*
+*undo-tree*
+
+
