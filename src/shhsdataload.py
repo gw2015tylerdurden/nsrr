@@ -211,13 +211,14 @@ class ShhsDataLoader:
             start_idx = int(fs * (start_time + count * self.duration))
             end_idx = start_idx + int(fs * (self.duration))
 
-            if len(signals[idx]) < end_idx:
+            try:
+                # extract data of the specified channel for the duration range
+                data = signals[idx][start_idx:end_idx]
+                extracted_data.append(data)
+            except:
                 print('duration is larger than the data length')
+                # do not append data anymore
                 break
-
-            # extract data of the specified channel for the duration range
-            data = signals[idx][start_idx:end_idx]
-            extracted_data.append(data)
 
         return extracted_data
 
@@ -256,7 +257,7 @@ class PreprocessResultPlotter:
         if target_fs is not None:
             self.resampled_time = np.linspace(0, duration, int(self.target_fs * duration))
 
-    def plot_and_save(self, output_format='png', dirname='debug_plot'):
+    def plot_and_save(self, output_format='eps', dirname='debug_plot'):
         if not self.is_plot:
             return
 
