@@ -17,11 +17,9 @@ class Normalizer(ABC):
 
 class StandardScalerNormalizer(Normalizer):
     def __init__(self):
-        self.ss = None
+        self.ss = StandardScaler()
 
     def normalize(self, data):
         data = np.array(data).reshape(-1, 1)
-        if self.ss is None:
-            ss = StandardScaler()
-        return ss.fit_transform(data).ravel()
+        return self.ss.fit_transform(data).ravel()
 
