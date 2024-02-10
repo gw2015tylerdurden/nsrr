@@ -118,12 +118,11 @@ class ShhsDataLoader:
         self.annotation_counts = {label: 0 for label in self.annotation_labels}
 
         with h5py.File(creation_filename, 'w') as hf:
-            dt_str = h5py.special_dtype(vlen=str)  # for save str in h5
-            dt_float = h5py.special_dtype(vlen=np.dtype('float64'))  # for save variable length signals in h5
+             dtype_variable_length_float = h5py.special_dtype(vlen=np.dtype('float64')) # for save variable length signals in h5
 
-            hf.create_dataset(f"channels", data=self.channel_labels, dtype=dt_str)
-            hf.create_dataset(f"target_fs", data=target_fs, dtype=dt_str)
-            hf.create_dataset(f"annotation_labels", data=self.annotation_labels, dtype=dt_str)
+             hf.create_dataset(f"channels", data=str(self.channel_labels))
+             hf.create_dataset(f"target_fs", data=str(target_fs))
+             hf.create_dataset(f"annotation_labels", data=str(self.annotation_labels))
 
             for edf_file, xml_file in tqdm(zip(self.edf_files, self.xml_files), total=len(self.edf_files), desc="Processing files"):
                 has_edf_all_target_channnels, fs_channels, signals = self.__load_edf_file_target_channel(edf_file)
@@ -135,10 +134,7 @@ class ShhsDataLoader:
                 for (signal, label) in zip(signal_list, label_list):
                     dataset_name = f"shhs{total_count}"
                     hf.create_dataset(f"{dataset_name}/label", data=label)
-                    # write variable length signals
-                    datasignal = hf.create_dataset(f"{dataset_name}/signal", (len(signal),), dtype=dt_float)
-                    for i, s in enumerate(signal):
-                        datasignal[i] = s
+                    hf.create_dataset(f"{dataset_name}/signal", data=signal, dtype=dtype_variable_length_float)
                     total_count += 1
 
             if self.verbose:
@@ -162,7 +158,12 @@ class ShhsDataLoader:
 
             if annotation in self.annotation_labels:
 
-                num_iterations = int(durations / self.duration)
+                measurement_time = len(signals[0]) / fs_channels[0]
+                if start_time + durations > measurement_time:
+                    # situation that durations is longer than signal
+                    num_iterations = int((measurement_time - start_time) / self.duration)
+                else:
+                    num_iterations = int(durations / self.duration)
 
                 for count in range(num_iterations):
                     extracted_signals = self.__extract_data(fs_channels, signals, start_time, count)
@@ -211,11 +212,11 @@ class ShhsDataLoader:
             start_idx = int(fs * (start_time + count * self.duration))
             end_idx = start_idx + int(fs * (self.duration))
 
-            try:
+            if end_idx <= len(signals[idx]):
                 # extract data of the specified channel for the duration range
                 data = signals[idx][start_idx:end_idx]
                 extracted_data.append(data)
-            except:
+            else:
                 print('duration is larger than the data length')
                 # do not append data anymore
                 break
