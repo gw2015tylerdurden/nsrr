@@ -118,11 +118,11 @@ class ShhsDataLoader:
         self.annotation_counts = {label: 0 for label in self.annotation_labels}
 
         with h5py.File(creation_filename, 'w') as hf:
-             dtype_variable_length_float = h5py.special_dtype(vlen=np.dtype('float64')) # for save variable length signals in h5
+            dtype_variable_length_float = h5py.special_dtype(vlen=np.dtype('float64')) # for save variable length signals in h5
 
-             hf.create_dataset(f"channels", data=str(self.channel_labels))
-             hf.create_dataset(f"target_fs", data=str(target_fs))
-             hf.create_dataset(f"annotation_labels", data=str(self.annotation_labels))
+            hf.create_dataset(f"channels", data=str(self.channel_labels))
+            hf.create_dataset(f"target_fs", data=str(target_fs))
+            hf.create_dataset(f"annotation_labels", data=str(self.annotation_labels))
 
             for edf_file, xml_file in tqdm(zip(self.edf_files, self.xml_files), total=len(self.edf_files), desc="Processing files"):
                 has_edf_all_target_channnels, fs_channels, signals = self.__load_edf_file_target_channel(edf_file)
