@@ -1,41 +1,46 @@
 hydra:
   run:
-    dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
-model_dir: models
+    dir: outputs/seed${seed}
+model_dir: ./models/
 
 original_dataset_path: ~/workspace/nsrr/shhs/polysomnography/
-creation_dataset_name: ~/workspace/nsrr/data/dataset.h5
+#creation_dataset_path: ~/workspace/nsrr/data13ch/
+creation_dataset_path: ~/workspace/nsrr/data-13ch-interp-linear/
 
 verbose: True
+is_debug: False
 
-datasets: ['shhs2']  #datasets: ['shhs1', 'shhs2']
+datasets: ['shhs1', 'shhs2']
 
 # https://github.com/nsrr/edf-editor-translator/blob/master/configuration/nsrr-psg-events-compumedics-mapping.csv
 annotation_labels: ['Wake', 'Stage 1 sleep', 'Stage 2 sleep', 'Stage 3 sleep', 'Stage 4 sleep', 'REM sleep']
-channel_labels: ['SaO2', 'THOR RES', 'ABDO RES', 'AIRFLOW']
+channel_labels: ['SaO2', 'H.R.', ['EEG(sec)', 'EEG 2', 'EEG2', 'EEG sec'], 'EEG', 'ECG', 'EOG(L)', 'EOG(R)', 'EMG', 'THOR RES', 'ABDO RES', 'POSITION', 'LIGHT', 'NEW AIR']
+#add_noise_channel_fs: [1.0, 10.0, 50.0, 125.0, 250.0]
+add_noise_channel_fs: []
+fs_channels:    [1.0,       1.0,                                    125.0, 125.0, 125.0,     50.0,     50.0, 125.0,       10.0,       10.0,        1.0,     1.0,      10.0]
 
 output_shhs_datainfo_csv: False  # set True when first run
-debug_plots_interval: None  # 200000
-random_state: 123
-in_channels: 4
-train_size: 0.8
-lr: 5e-4
-num_epoch: 1000
-batch_size: 96
+debug_plots_interval: 200000 #None 
+duration: 30.0
+target_fs : 125
+interp : 'linear'
+seed: 1919
+lr: 5e-7
+num_epoch: 300
+num_kfolds: 5
+
+balanced_train_num: 2000
+balanced_test_num: 1000
+
+batch_size: 200
 num_train_step: 100
-save_itvl: 50
-eval_itvl: 5
+save_itvl: 5 #50
+test_itvl: 5
 
-
-gpu:
-  train: 0
-  eval: 1
-
-# for evaluation
-trained_model_file: test.pt
+gpu: 1
 
 wandb:
   project: nsrr
-  group: sleep-stage
+  group: cnn-seed${seed}
   name: trial
   cwd: current_work_directory

@@ -1,12 +1,14 @@
-from collections import defaultdict, abc
 import wandb
-
+from collections import defaultdict, abc
 
 class WandbLogging:
-    def __init__(self, args):
+    def __init__(self, args, string=None):
         self.stats = defaultdict(list)
         wandb.init(project=args.wandb.project, group=args.wandb.group)
-        wandb.run.name = args.wandb.name + "_" + wandb.run.name
+        if string is not None:
+            wandb.run.name = string
+        else:
+            wandb.run.name = args.wandb.name + "_" + wandb.run.name
         wandb.config.update(self.__flatten(args))
 
     def __flatten(self, d, parent_key="", sep="."):
@@ -23,3 +25,7 @@ class WandbLogging:
 
     def log(self, **kwargs):
         wandb.log(kwargs)
+
+    def finish(self):
+        wandb.run.finish()
+

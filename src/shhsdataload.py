@@ -9,6 +9,9 @@ import numpy as np
 import h5py
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+import torch
+from torch.nn.utils.rnn import pad_sequence
+from omegaconf import ListConfig
 
 
 class ShhsDataLoader:
@@ -112,42 +115,60 @@ class ShhsDataLoader:
 
         print(f"[INFO] create {output_file}")
 
-    def create_target_fs_dataset_h5(self, channel_labels, target_fs=None, creation_filename='dataset.h5', debug_plots_interval=None):
+    def create_target_fs_dataset_h5(self, channel_labels, fs_channels, target_fs=None, creation_dataset_path='./', debug_plots_interval=None, save_file_interval=1000):
         total_count = 0
+        h5_file_index = 0
+        hf = None
+        self.fs_channels = fs_channels
         self.channel_labels = channel_labels
         self.annotation_counts = {label: 0 for label in self.annotation_labels}
+        self.debug_plotter = PreprocessResultPlotter(debug_plots_interval, channel_labels)
 
-        with h5py.File(creation_filename, 'w') as hf:
-            hf.create_dataset(f"channels", data=str(self.channel_labels))
-            hf.create_dataset(f"target_fs", data=str(target_fs))
-            hf.create_dataset(f"annotation_labels", data=str(self.annotation_labels))
+        for idx, (edf_file, xml_file) in enumerate(tqdm(zip(self.edf_files, self.xml_files), total=len(self.edf_files), desc="Processing files")):
+            if idx % save_file_interval == 0:
+                if 'hf' in locals() and hf is not None:
+                    # write data information when closing h5 file
+                    hf.create_dataset(f"fs_channels", data=self.fs_channels, dtype=np.float32)
+                    hf.create_dataset(f"channels", data=str(self.channel_labels[0]) if isinstance(self.channel_labels, list) else str(self.channel_labels))
+                    hf.create_dataset(f"target_fs", data=str(target_fs))
+                    hf.create_dataset(f"annotation_labels", data=str(self.annotation_labels))
+                    hf.close()
+                filename = f'dataset_{h5_file_index}.h5'
+                hf = h5py.File(creation_dataset_path + filename, 'w')
+                h5_file_index += 1
 
-            for edf_file, xml_file in tqdm(zip(self.edf_files, self.xml_files), total=len(self.edf_files), desc="Processing files"):
-                has_edf_all_target_channnels, fs_channels, signals = self.__load_edf_file_target_channel(edf_file)
-                if has_edf_all_target_channnels is False:
-                    continue
+            has_edf_all_target_channnels, fs_channels, signals = self.__load_edf_file_target_channel(edf_file)
+            if has_edf_all_target_channnels is False:
+                continue
 
-                signal_list, label_list = self.__preprocessing(xml_file, fs_channels, signals, target_fs, total_count, debug_plots_interval)
+            signal_list, label_list = self.__preprocessing(xml_file, fs_channels, signals, target_fs, total_count)
 
-                for (signal, label) in zip(signal_list, label_list):
-                    dataset_name = f"shhs{total_count}"
-                    hf.create_dataset(f"{dataset_name}/label", data=label, dtype='uint8')
-                    hf.create_dataset(f"{dataset_name}/signal", data=signal, dtype='float64')
-                    total_count += 1
-            hf.create_dataset(f"fs_channels", data=fs_channels, dtype='float32')
+            # for save variable length signals in h5
+            # pyedflib.readSignal returns float64, but original EDF has a 16 bit data format 
+            dtype_variable_length_float = h5py.special_dtype(vlen=np.dtype('float16'))
+            patient_no = f"{os.path.splitext(os.path.basename(edf_file))[0]}"
+            for (signal, label) in zip(signal_list, label_list):
+                dataset_name = f"shhs{total_count}"
+                hf.create_dataset(f"{patient_no}/{dataset_name}/signal", data=signal, dtype=dtype_variable_length_float)
+                hf.create_dataset(f"{patient_no}/{dataset_name}/label", data=label, dtype=np.uint8)
+                total_count += 1
 
-            if self.verbose:
-                print("------------------------------------")
-                print(f"[INFO] Total created data counts: {total_count}")
-                for label, count in self.annotation_counts.items():
-                    print(f"{label}: {count}")
-                print("------------------------------------")
+        if 'hf' in locals() and hf is not None:
+            hf.close()
+
+        if self.verbose:
+            print("------------------------------------")
+            print(f"[INFO] Total created data counts: {total_count}")
+            for label, count in self.annotation_counts.items():
+                print(f"{label}: {count}")
+            print("------------------------------------")
 
 
 
-    def __preprocessing(self, xml_file, fs_channels, signals, target_fs, debug_total_count, debug_plots_interval):
+    def __preprocessing(self, xml_file, fs_channels, signals, target_fs, total_count):
         signal_list = []
         label_list = []
+        debug_plots_interval = total_count
 
         tree = ElementTree.parse(xml_file)
         for event in tree.findall('.//ScoredEvent'):
@@ -168,7 +189,8 @@ class ShhsDataLoader:
                     extracted_signals = self.__extract_data(fs_channels, signals, start_time, count)
 
                     if target_fs is None:
-                        after_fs_signals =  self.__padding_signals(extracted_signals)
+                        #after_fs_signals = self.__padding_signals(extracted_signals)
+                        after_fs_signals = extracted_signals
                     else:
                         after_fs_signals = self.__interpolate_data(fs_channels, extracted_signals, self.duration, target_fs)
                     normalized_signals = [self.normalizer.normalize(signal) for signal in after_fs_signals]
@@ -179,13 +201,11 @@ class ShhsDataLoader:
 
                     # to confirm result
                     self.annotation_counts[annotation] += 1  # for verbose
-                    debug_plotter = PreprocessResultPlotter(debug_plots_interval, debug_total_count, self.channel_labels)
-                    debug_plotter.add_plot_data(fs_channels, target_fs, self.duration, annotation, extracted_signals, after_fs_signals, normalized_signals)
-                    debug_plotter.plot_and_save()
-                    debug_total_count += 1
+                    self.debug_plotter.plot_and_save(debug_plots_interval, fs_channels, target_fs, self.duration, annotation, extracted_signals, after_fs_signals, normalized_signals)
+                    debug_plots_interval += 1
 
         return signal_list, label_list
-    
+
 
     def __padding_signals(self, signals):
         padding_signals = []
@@ -198,6 +218,15 @@ class ShhsDataLoader:
             padding_signals.append(padding_signal)
         return padding_signals
 
+    def __is_all_channel_included(self, edf_channels):
+        for label in self.channel_labels:
+            if isinstance(label, ListConfig) or isinstance(label, list):
+                if not any(item in edf_channels for item in label):
+                    return False
+            else:
+                if label not in edf_channels:
+                    return False
+        return True
 
     def __load_edf_file_target_channel(self, edf_file):
         fs = []
@@ -206,16 +235,29 @@ class ShhsDataLoader:
         with pyedflib.EdfReader(edf_file) as f:
             # load all channel labels
             edf_channels = f.getSignalLabels()
-            if not all(label in edf_channels for label in self.channel_labels):
+            if not self.__is_all_channel_included(edf_channels):
                 # lack target channel in xml
                 return False, None, None
 
             for target_label in self.channel_labels:
-                channel_idx = edf_channels.index(target_label)
+                if isinstance(target_label, ListConfig) or isinstance(target_label, list):
+                    for i in target_label:
+                        try:
+                            channel_idx = edf_channels.index(i)
+                            break
+                        except:
+                            continue
+                else:
+                    channel_idx = edf_channels.index(target_label)
                 fs.append(f.samplefrequency(channel_idx))
                 signals.append(f.readSignal(channel_idx))
 
-            return True, fs, signals
+            if self.fs_channels != fs:
+                if self.verbose:
+                    print(f"[WARN] sampling freq is not correct({self.fs_channels}): {edf_file}:{fs}")
+                return False, None, None
+
+        return True, fs, signals
 
 
     def __extract_data(self, fs_channels, signals, start_time, count):
@@ -249,38 +291,27 @@ class ShhsDataLoader:
 
 
 class PreprocessResultPlotter:
-    def __init__(self, plots_interval, total_count, channel_labels):
+    def __init__(self, plots_interval, channel_labels):
         if plots_interval is None or not isinstance(plots_interval, int):
             self.is_plot = False
         else:
             self.is_plot = True
+            self.plots_interval = plots_interval
+            self.channel_labels = channel_labels
 
-        self.total_count = total_count
-        self.channel_labels = channel_labels
-
-    def add_plot_data(self, fs_channels, target_fs, duration, annotation, extracted_signals, interpolated_signals, normalized_signals):
-        if not self.is_plot:
+    def plot_and_save(self, total_count, fs_channels, target_fs, duration, annotation, extracted_signals, interpolated_signals, normalized_signals, output_format='png', dirname='debug_plot'):
+        if not self.is_plot or total_count % self.plots_interval != 0:
             return
-        self.fs_channels = fs_channels
-        self.target_fs = target_fs
-        self.extracted_data = extracted_signals
-        self.duration = duration
-        self.annotation = annotation
+
         self.time = [np.arange(len(data)) / fs for data, fs in zip(extracted_signals, fs_channels)]
-        self.interpolated_signals = interpolated_signals
-        self.normalized_signals = normalized_signals
         if target_fs is not None:
-            self.resampled_time = np.linspace(0, duration, int(self.target_fs * duration))
-
-    def plot_and_save(self, output_format='eps', dirname='debug_plot'):
-        if not self.is_plot:
-            return
+            self.resampled_time = np.linspace(0, duration, int(target_fs * duration))
 
         # Check if directory exists, if not create it
         if not os.path.exists(dirname):
             os.makedirs(dirname)
 
-        n_channels = len(self.fs_channels)
+        n_channels = len(fs_channels)
         fig, axs = plt.subplots(n_channels, 2, figsize=(50, 5 * n_channels))
         plt.rc('font', size=25)
         plt.rc('axes', titlesize=25)
@@ -295,25 +326,25 @@ class PreprocessResultPlotter:
 
         for i in range(n_channels):
             # Original Data and Interpolated Data plots
-            axs[i, 0].plot(self.time[i], self.extracted_data[i], label='Original Data')
-            if self.target_fs is None:
+            axs[i, 0].plot(self.time[i], extracted_signals[i], label='Original Data')
+            if target_fs is None:
                 time = self.time[i]
             else:
                 time = self.resampled_time
-            axs[i, 0].plot(time, self.interpolated_signals[i], label='Interpolated Data', linestyle='--')
-            axs[i, 0].set_title(f"Channel: {self.channel_labels[i]} (fs: {self.fs_channels[i]} Hz)")
+            axs[i, 0].plot(time, interpolated_signals[i], label='Interpolated Data', linestyle='--')
+            axs[i, 0].set_title(f"Channel: {self.channel_labels[i]} (fs: {fs_channels[i]} Hz)")
             axs[i, 0].legend(loc='upper right')
 
             # Normalized Signal plots
-            axs[i, 1].plot(time, self.normalized_signals[i], label='Normalized Signal')
-            if self.target_fs is not None:
-                axs[i, 1].set_title(f"Channel: {self.channel_labels[i]} Normalized (fs: {self.target_fs} Hz)")
+            axs[i, 1].plot(time, normalized_signals[i], label='Normalized Signal')
+            if target_fs is not None:
+                axs[i, 1].set_title(f"Channel: {self.channel_labels[i]} Normalized (fs: {target_fs} Hz)")
             axs[i, 1].legend(loc='upper right')
 
-        fig.suptitle(f"Annotation: {self.annotation}, Total count: {self.total_count}")
+        fig.suptitle(f"Annotation: {annotation}, Total count: {total_count}")
         plt.tight_layout()
 
         # Save the plot inside the specified directory
-        save_path = os.path.join(dirname, f"debug_plot_{self.total_count}.{output_format}")
+        save_path = os.path.join(dirname, f"debug_plot_{total_count}.{output_format}")
         plt.savefig(save_path, dpi=300)
         plt.close()
