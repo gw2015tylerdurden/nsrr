@@ -121,6 +121,7 @@ class ShhsDataLoader:
             hf.create_dataset(f"channels", data=str(self.channel_labels))
             hf.create_dataset(f"target_fs", data=str(target_fs))
             hf.create_dataset(f"annotation_labels", data=str(self.annotation_labels))
+            dtype_variable_length_float = h5py.special_dtype(vlen=np.float64) # for save variable length signals in h5
 
             for edf_file, xml_file in tqdm(zip(self.edf_files, self.xml_files), total=len(self.edf_files), desc="Processing files"):
                 has_edf_all_target_channnels, fs_channels, signals = self.__load_edf_file_target_channel(edf_file)
@@ -131,10 +132,12 @@ class ShhsDataLoader:
 
                 for (signal, label) in zip(signal_list, label_list):
                     dataset_name = f"shhs{total_count}"
-                    hf.create_dataset(f"{dataset_name}/label", data=label, dtype='uint8')
-                    hf.create_dataset(f"{dataset_name}/signal", data=signal, dtype='float64')
+                    hf.create_dataset(f"{dataset_name}/signal", data=signal, dtype=dtype_variable_length_float, chunks=True)
+                    hf.create_dataset(f"{dataset_name}/label", data=label, dtype=np.uint8)
                     total_count += 1
-            hf.create_dataset(f"fs_channels", data=fs_channels, dtype='float32')
+
+            hf.create_dataset(f"fs_channels", data=fs_channels, dtype=np.float32)
+
 
             if self.verbose:
                 print("------------------------------------")
@@ -168,7 +171,8 @@ class ShhsDataLoader:
                     extracted_signals = self.__extract_data(fs_channels, signals, start_time, count)
 
                     if target_fs is None:
-                        after_fs_signals =  self.__padding_signals(extracted_signals)
+                        #after_fs_signals = self.__padding_signals(extracted_signals)
+                        after_fs_signals = extracted_signals
                     else:
                         after_fs_signals = self.__interpolate_data(fs_channels, extracted_signals, self.duration, target_fs)
                     normalized_signals = [self.normalizer.normalize(signal) for signal in after_fs_signals]
