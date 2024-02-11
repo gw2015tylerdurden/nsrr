@@ -118,8 +118,6 @@ class ShhsDataLoader:
         self.annotation_counts = {label: 0 for label in self.annotation_labels}
 
         with h5py.File(creation_filename, 'w') as hf:
-            dtype_variable_length_float = h5py.special_dtype(vlen=np.dtype('float64')) # for save variable length signals in h5
-
             hf.create_dataset(f"channels", data=str(self.channel_labels))
             hf.create_dataset(f"target_fs", data=str(target_fs))
             hf.create_dataset(f"annotation_labels", data=str(self.annotation_labels))
@@ -133,9 +131,10 @@ class ShhsDataLoader:
 
                 for (signal, label) in zip(signal_list, label_list):
                     dataset_name = f"shhs{total_count}"
-                    hf.create_dataset(f"{dataset_name}/label", data=label)
-                    hf.create_dataset(f"{dataset_name}/signal", data=signal, dtype=dtype_variable_length_float)
+                    hf.create_dataset(f"{dataset_name}/label", data=label, dtype='uint8')
+                    hf.create_dataset(f"{dataset_name}/signal", data=signal, dtype='float64')
                     total_count += 1
+            hf.create_dataset(f"fs_channels", data=fs_channels, dtype='float32')
 
             if self.verbose:
                 print("------------------------------------")
@@ -169,7 +168,7 @@ class ShhsDataLoader:
                     extracted_signals = self.__extract_data(fs_channels, signals, start_time, count)
 
                     if target_fs is None:
-                        after_fs_signals = extracted_signals
+                        after_fs_signals =  self.__padding_signals(extracted_signals)
                     else:
                         after_fs_signals = self.__interpolate_data(fs_channels, extracted_signals, self.duration, target_fs)
                     normalized_signals = [self.normalizer.normalize(signal) for signal in after_fs_signals]
@@ -186,6 +185,19 @@ class ShhsDataLoader:
                     debug_total_count += 1
 
         return signal_list, label_list
+    
+
+    def __padding_signals(self, signals):
+        padding_signals = []
+        max_length = max(len(s) for s in signals)
+
+        for signal in signals:
+            padding_length = max_length - len(signal)
+            # padding NaN
+            padding_signal = np.concatenate([signal, np.full(padding_length, np.nan)])
+            padding_signals.append(padding_signal)
+        return padding_signals
+
 
     def __load_edf_file_target_channel(self, edf_file):
         fs = []
@@ -205,6 +217,7 @@ class ShhsDataLoader:
 
             return True, fs, signals
 
+
     def __extract_data(self, fs_channels, signals, start_time, count):
         extracted_data = []
         
@@ -222,6 +235,7 @@ class ShhsDataLoader:
                 break
 
         return extracted_data
+
 
     def __interpolate_data(self, fs_channels, extracted_data, duration, target_fs):
         interpolated_data = []
