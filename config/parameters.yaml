@@ -4,7 +4,7 @@ hydra:
 model_dir: models
 
 original_dataset_path: ~/workspace/nsrr/shhs/polysomnography/
-creation_dataset_name: ~/workspace/nsrr/data/dataset.h5
+creation_dataset_path: ~/workspace/nsrr/data/
 
 verbose: True
 

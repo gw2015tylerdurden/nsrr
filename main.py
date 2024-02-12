@@ -62,7 +62,7 @@ def main(args):
 
     shhs.create_target_fs_dataset_h5(args.channel_labels,
                                      target_fs=None,
-                                     creation_filename=os.path.expanduser(args.creation_dataset_name),
+                                     creation_dataset_path=os.path.expanduser(args.creation_dataset_path),
                                      debug_plots_interval=args.debug_plots_interval)
     #run(annotation_labels, channel_labels, dataset)
 
