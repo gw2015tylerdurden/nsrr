@@ -112,33 +112,43 @@ class ShhsDataLoader:
 
         print(f"[INFO] create {output_file}")
 
-    def create_target_fs_dataset_h5(self, channel_labels, target_fs=None, creation_dataset_path='./', debug_plots_interval=None):
+    def create_target_fs_dataset_h5(self, channel_labels, target_fs=None, creation_dataset_path='./', debug_plots_interval=None, save_file_interval=1000):
         total_count = 0
+        h5_file_index = 0
+        hf = None
+        fs_channels = None
         self.channel_labels = channel_labels
         self.annotation_counts = {label: 0 for label in self.annotation_labels}
 
         dtype_variable_length_float = h5py.special_dtype(vlen=np.float64) # for save variable length signals in h5
 
-        for edf_file, xml_file in tqdm(zip(self.edf_files, self.xml_files), total=len(self.edf_files), desc="Processing files"):
-            filename = edf_file.split('/')[-1].split('.')[0] + '.h5'
-            with h5py.File(creation_dataset_path + filename, 'w') as hf:
+        for idx, (edf_file, xml_file) in enumerate(tqdm(zip(self.edf_files, self.xml_files), total=len(self.edf_files), desc="Processing files")):
+            if idx % save_file_interval == 0:
+                if 'hf' in locals() and hf is not None:
+                    # write data information when closing h5 file
+                    hf.create_dataset(f"fs_channels", data=fs_channels, dtype=np.float32)
+                    hf.create_dataset(f"channels", data=str(self.channel_labels))
+                    hf.create_dataset(f"target_fs", data=str(target_fs))
+                    hf.create_dataset(f"annotation_labels", data=str(self.annotation_labels))
+                    hf.close()
+                filename = f'dataset_{h5_file_index}.h5'
+                hf = h5py.File(creation_dataset_path + filename, 'w')
+                h5_file_index += 1
 
-                has_edf_all_target_channnels, fs_channels, signals = self.__load_edf_file_target_channel(edf_file)
-                if has_edf_all_target_channnels is False:
-                    continue
+            has_edf_all_target_channnels, fs_channels, signals = self.__load_edf_file_target_channel(edf_file)
+            if has_edf_all_target_channnels is False:
+                continue
 
-                signal_list, label_list = self.__preprocessing(xml_file, fs_channels, signals, target_fs, total_count, debug_plots_interval)
+            signal_list, label_list = self.__preprocessing(xml_file, fs_channels, signals, target_fs, total_count, debug_plots_interval)
 
-                for (signal, label) in zip(signal_list, label_list):
-                    dataset_name = f"shhs{total_count}"
-                    hf.create_dataset(f"{dataset_name}/signal", data=signal, dtype=dtype_variable_length_float, chunks=True)
-                    hf.create_dataset(f"{dataset_name}/label", data=label, dtype=np.uint8)
-                    total_count += 1
+            for (signal, label) in zip(signal_list, label_list):
+                dataset_name = f"shhs{total_count}"
+                hf.create_dataset(f"{dataset_name}/signal", data=signal, dtype=dtype_variable_length_float, chunks=True)
+                hf.create_dataset(f"{dataset_name}/label", data=label, dtype=np.uint8)
+                total_count += 1
 
-                hf.create_dataset(f"fs_channels", data=fs_channels, dtype=np.float32)
-                hf.create_dataset(f"channels", data=str(self.channel_labels))
-                hf.create_dataset(f"target_fs", data=str(target_fs))
-                hf.create_dataset(f"annotation_labels", data=str(self.annotation_labels))
+        if 'hf' in locals() and hf is not None:
+            hf.close()
 
         if self.verbose:
             print("------------------------------------")

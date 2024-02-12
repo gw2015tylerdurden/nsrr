@@ -16,12 +16,12 @@ channel_labels: ['SaO2', 'THOR RES', 'ABDO RES', 'AIRFLOW']
 
 output_shhs_datainfo_csv: False  # set True when first run
 debug_plots_interval: None  # 200000
-random_state: 123
+seed: 36
 in_channels: 4
 train_size: 0.8
 lr: 5e-4
 num_epoch: 1000
-batch_size: 96
+batch_size: 128
 num_train_step: 100
 save_itvl: 50
 eval_itvl: 5
