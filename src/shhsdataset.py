@@ -25,7 +25,7 @@ class ShhsDataset(Dataset):
         file, dataset_name = self.dataset_keys[idx]
 
         # Convert from float64 to float32
-        original_data = [torch.tensor(s, dtype=torch.float32) for s in file[f"shhs1/signal"][:]]
+        original_data = [torch.tensor(s, dtype=torch.float32) for s in file[f"{dataset_name}/signal"][:]]
         padding_data = pad_sequence(original_data, batch_first=True, padding_value=float('nan')).unsqueeze(1)
         label = torch.tensor(file[f"{dataset_name}/label"][()])
         return padding_data, label

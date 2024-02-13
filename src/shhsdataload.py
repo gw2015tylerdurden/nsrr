@@ -112,11 +112,11 @@ class ShhsDataLoader:
 
         print(f"[INFO] create {output_file}")
 
-    def create_target_fs_dataset_h5(self, channel_labels, target_fs=None, creation_dataset_path='./', debug_plots_interval=None, save_file_interval=1000):
+    def create_target_fs_dataset_h5(self, channel_labels, fs_channels, target_fs=None, creation_dataset_path='./', debug_plots_interval=None, save_file_interval=1000):
         total_count = 0
         h5_file_index = 0
         hf = None
-        fs_channels = None
+        self.fs_channels = fs_channels
         self.channel_labels = channel_labels
         self.annotation_counts = {label: 0 for label in self.annotation_labels}
 
@@ -126,7 +126,7 @@ class ShhsDataLoader:
             if idx % save_file_interval == 0:
                 if 'hf' in locals() and hf is not None:
                     # write data information when closing h5 file
-                    hf.create_dataset(f"fs_channels", data=fs_channels, dtype=np.float32)
+                    hf.create_dataset(f"fs_channels", data=self.fs_channels, dtype=np.float32)
                     hf.create_dataset(f"channels", data=str(self.channel_labels))
                     hf.create_dataset(f"target_fs", data=str(target_fs))
                     hf.create_dataset(f"annotation_labels", data=str(self.annotation_labels))
@@ -230,7 +230,12 @@ class ShhsDataLoader:
                 fs.append(f.samplefrequency(channel_idx))
                 signals.append(f.readSignal(channel_idx))
 
-            return True, fs, signals
+            if self.fs_channels != fs:
+                if self.verbose:
+                    print(f"[WARN] sampling freq is not correct({self.fs_channels}): {edf_file}:{fs}")
+                return False, None, None
+
+        return True, fs, signals
 
 
     def __extract_data(self, fs_channels, signals, start_time, count):

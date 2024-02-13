@@ -77,22 +77,25 @@ class MaxPool1dDifferentSamplingFreq(nn.Module):
 
 
 class SimpleCNN(ModelBase):
-    def __init__(self, num_classes, fs_channels, num_channels):
+    def __init__(self, num_classes, fs_channels, input_shape):
         super().__init__()
         one_channel = 1
 
         self.features = nn.Sequential(
-            Conv1dDifferentSamplingFreq(one_channel, 32, fs_channels, base_kernel_size=5, stride='half'),
+            Conv1dDifferentSamplingFreq(one_channel, 32, fs_channels, base_kernel_size=5, stride='same'),
             nn.GELU(),
             MaxPool1dDifferentSamplingFreq(kernel_size=2, stride=2),
 
             Conv1dDifferentSamplingFreq(32, 64, fs_channels, base_kernel_size=5, stride='same'),
             nn.GELU(),
-            MaxPool1dDifferentSamplingFreq(kernel_size=2, stride=2)
+            MaxPool1dDifferentSamplingFreq(kernel_size=2, stride=2),
         )
 
+        #feature_size = self.__calc_feature_size(input_shape)
+
         self.classifier = nn.Sequential(
-            nn.Linear(self.features.reshape(-1), 256),
+            #nn.Linear(feature_size, 256),
+            nn.Linear(14912, 256),
             nn.GELU(),
             nn.Dropout(0.5),
             nn.Linear(256, num_classes)
@@ -100,18 +103,27 @@ class SimpleCNN(ModelBase):
 
     def forward(self, x):
         x = self.features(x)
-        x = x.view(x.size(0), -1)
+        batch, channel, feature, sequence = x.shape
+        flatten = [remove_padding_data(x[:, i, :, :]).view(batch, -1) for i in range(channel)]
+        x = torch.cat(flatten, dim=1)
         x = self.classifier(x)
         return x
+
+    def __calc_feature_size(self, input_shape):
+        # [TODO] NaNでデータ数が減少することを考慮しないといけない、本物のデータをいれるといい
+        dummy_input = torch.randn(input_shape)
+        with torch.no_grad():
+            features_output = self.features(dummy_input)
+        return features_output.view(features_output.size(0), -1).size(1)
 
 class ModelTrainingRoutine(TrainingRoutineBase):
     def __init__(self, model, criterion='cross_entropy', optimizer='Adam', lr=1e-3):
         super().__init__(model, criterion, optimizer, lr)
 
-    def run(self, dataset, annotation_labels, channel_labels, num_epoch, batch_size):
-        #train_dataset, test_dataset = dataset.split(size=0.1)
+    def run(self, dataset, annotation_labels, channel_labels, num_epoch, batch_size, train_size=0.7):
+        train_dataset, test_dataset = dataset.split(size=train_size)
         train_loader = torch.utils.data.DataLoader(
-            dataset, #train_dataset,
+            train_dataset,
             batch_size=batch_size,
             num_workers=os.cpu_count(), # main cpu threads_num
             pin_memory=True,

@@ -17,11 +17,19 @@ def main(args):
 
     model = SimpleCNN(num_classes=len(annotation_labels),
                       fs_channels=fs_channels,
-                      num_channels=len(channels))
+                      # [batch_size, num_channels, features, sequence]
+                      input_shape=[args.batch_size, len(fs_channels), 1, int(max(fs_channels)*args.duration)]
+                      )
 
     routine = ModelTrainingRoutine(model)
-    #routine.wandb_init(args)
-    routine.run(dataset, annotation_labels, channels, args.num_epoch, args.batch_size)
+    routine.wandb_init(args)
+    routine.run(dataset,
+                annotation_labels,
+                channels,
+                args.num_epoch,
+                args.batch_size,
+                args.train_size
+                )
 
 if __name__ == '__main__':
     main()
