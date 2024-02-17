@@ -1,7 +1,7 @@
 import hydra
 from src.seeds import DeterministicSeed
 from src.shhsdataset import ShhsDataset
-from src.model import SimpleCNN, ModelTrainingRoutine
+from src.model import ModelCNN, ModelTrainingRoutine
 import os
 import glob
 
@@ -15,13 +15,13 @@ def main(args):
 
     fs_channels, channels, _, annotation_labels = dataset.get_dataset_info()
 
-    model = SimpleCNN(num_classes=len(annotation_labels),
+    model = ModelCNN(num_classes=len(annotation_labels),
                       fs_channels=fs_channels,
                       # [batch_size, num_channels, features, sequence]
                       input_shape=[args.batch_size, len(fs_channels), 1, int(max(fs_channels)*args.duration)]
                       )
 
-    routine = ModelTrainingRoutine(model)
+    routine = ModelTrainingRoutine(model, args)
     routine.wandb_init(args)
     routine.run(dataset,
                 annotation_labels,

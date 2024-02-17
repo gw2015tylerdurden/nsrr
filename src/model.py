@@ -1,31 +1,13 @@
+import os
 import torch
 import torch.nn as nn
+import numpy as np
 from tqdm import tqdm
 from .base import ModelBase, TrainingRoutineBase
-from torch.nn.utils.rnn import pad_sequence
-import os
-
-
-def remove_padding_data(x):
-    batch, feat, sequence = x.shape
-    valid_data_mask = ~torch.isnan(x)
-    not_nan_data = torch.masked_select(x, valid_data_mask)
-    return not_nan_data.reshape(batch, feat, -1)
-
-
-def add_padding_data(outputs):
-    batch_size = outputs[0].size(0)
-    padded_outputs = []
-    for batch in range(batch_size):
-        batch_outputs = [o[batch].transpose(0, 1) for o in outputs]
-        # pad_sequence はシーケンス長が最初の次元である必要がある
-        padded_batch = pad_sequence(batch_outputs, batch_first=True, padding_value=float('nan'))
-        # pad_sequenceの結果を再び転置し, チャンネル数を最初の次元に戻す
-        padded_batch = padded_batch.transpose(1, 2)
-        padded_outputs.append(padded_batch)
-
-    padding_out = torch.stack(padded_outputs)
-    return padding_out
+from .confutsion_matrix import plot_confusion_matrix
+from .utils import remove_padding_data, add_padding_data
+from .cam1d import GradCAM1D
+from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 
 
 class Conv1dDifferentSamplingFreq(nn.Module):
@@ -76,36 +58,58 @@ class MaxPool1dDifferentSamplingFreq(nn.Module):
         return pooling_out
 
 
-class SimpleCNN(ModelBase):
+class ModelCNN(ModelBase):
     def __init__(self, num_classes, fs_channels, input_shape):
         super().__init__()
         one_channel = 1
+        self.is_all_fs_same = False
 
-        self.features = nn.Sequential(
-            Conv1dDifferentSamplingFreq(one_channel, 32, fs_channels, base_kernel_size=5, stride='same'),
-            nn.GELU(),
-            MaxPool1dDifferentSamplingFreq(kernel_size=2, stride=2),
+        if all(i == fs_channels[0] for i in fs_channels):
+            # all channels has a same sampling frequency
+            self.is_all_fs_same = True
+            self.features = nn.ModuleList([
+                nn.Sequential(
+                    nn.Conv1d(one_channel, 32, kernel_size=5, stride=2),
+                    nn.GELU(),
+                    nn.MaxPool1d(kernel_size=2, stride=2),
 
-            Conv1dDifferentSamplingFreq(32, 64, fs_channels, base_kernel_size=5, stride='same'),
-            nn.GELU(),
-            MaxPool1dDifferentSamplingFreq(kernel_size=2, stride=2),
-        )
+                    nn.Conv1d(32, 64, kernel_size=5, stride=1),
+                    nn.GELU(),
+                    nn.MaxPool1d(kernel_size=2, stride=2),
+                ) for _ in range(len(fs_channels))
+            ])
 
-        #feature_size = self.__calc_feature_size(input_shape)
+        else:
+            # [TODO]
+            self.features = nn.Sequential(
+                Conv1dDifferentSamplingFreq(one_channel, 32, fs_channels, base_kernel_size=5, stride='same'),
+                nn.GELU(),
+                MaxPool1dDifferentSamplingFreq(kernel_size=2, stride=2),
+
+                Conv1dDifferentSamplingFreq(32, 64, fs_channels, base_kernel_size=5, stride='same'),
+                nn.GELU(),
+                MaxPool1dDifferentSamplingFreq(kernel_size=2, stride=2),
+            )
+
+            #feature_size = self.__calc_feature_size(input_shape)
 
         self.classifier = nn.Sequential(
-            #nn.Linear(feature_size, 256),
-            nn.Linear(14912, 256),
+            nn.Linear(119296, 256),
             nn.GELU(),
             nn.Dropout(0.5),
             nn.Linear(256, num_classes)
         )
 
     def forward(self, x):
-        x = self.features(x)
-        batch, channel, feature, sequence = x.shape
-        flatten = [remove_padding_data(x[:, i, :, :]).view(batch, -1) for i in range(channel)]
-        x = torch.cat(flatten, dim=1)
+        x = [conv(x[:, i, :, :]) for i, conv in enumerate(self.features)]
+
+        if self.is_all_fs_same:
+            # flatten
+            x = torch.cat([output.view(output.size(0), -1) for output in x], dim=1)
+        else:
+            # [TODO]
+            #flatten = [remove_padding_data(x[:, i, :, :]).view(batch, -1) for i in range(channel)]
+            x = x
         x = self.classifier(x)
         return x
 
@@ -116,9 +120,44 @@ class SimpleCNN(ModelBase):
             features_output = self.features(dummy_input)
         return features_output.view(features_output.size(0), -1).size(1)
 
+
 class ModelTrainingRoutine(TrainingRoutineBase):
-    def __init__(self, model, criterion='cross_entropy', optimizer='Adam', lr=1e-3):
-        super().__init__(model, criterion, optimizer, lr)
+    def __init__(self, model, args, criterion='cross_entropy', optimizer='Adam'):
+        super().__init__(model, criterion, optimizer, lr=args.lr, gpu_id=args.gpu)
+        self.save_itvl = args.save_itvl
+        self.test_itvl = args.test_itvl
+        self.model_dir = args.model_dir
+
+
+    def __plot_cam_result(self, inputs, labels, annotation_labels):
+        sequence_cam = []
+        # set cam targets as the correct label
+        targets = [ClassifierOutputTarget(i.item()) for i in labels]
+        for feature in self.model.features:
+            last_layer = [feature[-1]]
+            #cam = GradCAM1D(model=self.model, target_layers=self.model.features)
+            #cam = GradCAM1D(model=self.model, target_layers=feature)
+            cam = GradCAM1D(model=self.model, target_layers=last_layer)
+            sequence_cam.append(cam(input_tensor=inputs, targets=targets))
+
+        # plot inputs and sequence_cam
+        self.__plot_and_save(inputs[0], sequence_cam[0], annotation_labels[labels[0]])
+        return
+
+    def __plot_and_save(self, input, cam, annotation):
+        import matplotlib.pyplot as plt
+        channel_num = input.size(0)
+        fig, axs = plt.subplots(channel_num, 2, figsize=(10, 2))
+        for i in range(channel_num):
+            axs[i, 0].plot(input[i].squeeze().detach().cpu().numpy())
+            axs[i, 0].set_title(f'Channel {i+1} - Label: {annotation}')
+
+            # Plot CAM
+            cam_data = cam[i].squeeze()
+            im = axs[i, 1].imshow(cam_data[np.newaxis, :], aspect='auto', cmap='jet')
+            axs[i, 1].set_title('CAM Result')
+        plt.tight_layout()
+        plt.show()
 
     def run(self, dataset, annotation_labels, channel_labels, num_epoch, batch_size, train_size=0.7):
         train_dataset, test_dataset = dataset.split(size=train_size)
@@ -128,6 +167,14 @@ class ModelTrainingRoutine(TrainingRoutineBase):
             num_workers=os.cpu_count(), # main cpu threads_num
             pin_memory=True,
             drop_last=True,
+        )
+
+        test_loader = torch.utils.data.DataLoader(
+            test_dataset,
+            batch_size=batch_size,
+            num_workers=os.cpu_count(),
+            pin_memory=True,
+            drop_last=False,
         )
 
         self.model = self.model.to(self.device)
@@ -151,7 +198,40 @@ class ModelTrainingRoutine(TrainingRoutineBase):
             epoch_loss = running_loss / len(train_loader.dataset)
 
             if self.wandb is not None:
-                self.wandb.update(loss=epoch_loss)
-            else:
-                print(f"Epoch {epoch + 1}/{self.num_epochs} - Loss: {epoch_loss:.4f}")
+                self.wandb.update(train_loss=epoch_loss)
+            print(f"[LOG] Epoch {epoch + 1}/{num_epoch} - Loss: {epoch_loss:.4f}")
 
+            if epoch % self.save_itvl == 0:
+                model_file = f"model_e{epoch + 1}.pt"
+                #torch.save(self.model.state_dict(), os.path.join(self.model_dir, model_file))
+                torch.save(self.model.state_dict(),  model_file)
+                print(f"[LOG] Model parameters are saved to {model_file}.")
+
+                self.model.eval()
+                test_loss = 0.0
+                correct = 0
+                all_predictions = []
+                all_true_labels = []
+                with torch.no_grad():
+                    for inputs, labels in test_loader:
+                        inputs, labels = inputs.to(self.device), labels.to(self.device)
+                        outputs = self.model(inputs).detach()
+                        loss = self.criterion(outputs, labels)
+                        test_loss += loss.item() * inputs.size(0)
+                        _, predicted = outputs.max(1)
+                        all_predictions.extend(predicted.cpu().numpy())
+                        all_true_labels.extend(labels.cpu().numpy())
+                        correct += predicted.eq(labels).sum().item()
+
+                self.__plot_cam_result(inputs, labels, annotation_labels)
+
+                epoch_loss /= len(test_loader.dataset)
+                accuracy = 100. * correct / len(test_loader.dataset)
+                if self.wandb is not None:
+                    self.wandb.update(test_loss=epoch_loss, acuuracy=accuracy)
+
+                print(f"[LOG] Test Loss after Epoch {epoch + 1}: {epoch_loss:.4f}")
+                print(f"[LOG] Test Accuracy after Epoch {epoch + 1}: {accuracy:.2f}%\n")
+
+                # Compute and plot confusion matrix
+                plot_confusion_matrix(np.array(all_true_labels), np.array(all_predictions), classes=annotation_labels, accuracy=accuracy, epoch=epoch)

@@ -33,7 +33,10 @@ class ShhsDataset(Dataset):
 
     def get_dataset_info(self):
         file = self.h5_file_objects[0]
-        return file["fs_channels"][:], file["channels"][()], file["target_fs"][()], file["annotation_labels"][()]
+        byte_string_to_list = lambda b: ast.literal_eval(b.decode('utf-8'))
+        channels = byte_string_to_list(file["channels"][()])
+        annotation_labels = byte_string_to_list(file["annotation_labels"][()])
+        return file["fs_channels"][:], channels, file["target_fs"][()], annotation_labels
 
 
     def split(self, size=0.7, random_state=None):

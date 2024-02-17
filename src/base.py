@@ -2,6 +2,7 @@ import torch
 from abc import ABC, abstractmethod
 from .wandblogging import WandbLogging
 
+
 class ModelBase(ABC, torch.nn.Module):
     def __init__(self):
         super().__init__()
@@ -12,7 +13,7 @@ class ModelBase(ABC, torch.nn.Module):
 
 
 class TrainingRoutineBase(ABC):
-    def __init__(self, model, criterion, optimizer, lr=1e-3, device='cuda', device_num=0):
+    def __init__(self, model, criterion, optimizer, lr=1e-3, device='cuda', gpu_id=0):
         self.model = model
         self.wandb = None
 
@@ -29,7 +30,7 @@ class TrainingRoutineBase(ABC):
             exit(1)
 
         self.device = torch.device(device)
-        torch.cuda.set_device(device_num)
+        torch.cuda.set_device(gpu_id)
 
     @abstractmethod
     def run(self):
