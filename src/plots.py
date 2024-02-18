@@ -4,8 +4,14 @@ import numpy as np
 import seaborn
 from sklearn.metrics import confusion_matrix
 from scipy.interpolate import interp1d
+from sklearn.preprocessing import normalize
 
 matplotlib.use('TkAgg')
+plt.rcParams['text.color'] = 'black'
+plt.rcParams['axes.labelcolor'] = 'black'
+plt.rcParams['xtick.color'] = 'black'
+plt.rcParams['ytick.color'] = 'black'
+
 
 def plot_confusion_matrix(y_true, y_pred, classes, accuracy, epoch, title=None, cmap=plt.cm.Blues):
     if not title:
@@ -13,19 +19,21 @@ def plot_confusion_matrix(y_true, y_pred, classes, accuracy, epoch, title=None, 
 
     # Compute confusion matrix
     cm = confusion_matrix(y_true, y_pred)
+    cm_normalized = normalize(cm, axis=1, norm='l1')
+
+    annot = np.vectorize(lambda x: f'{int(x)}' if x != 0 else '')(cm)
 
     fig, ax = plt.subplots()
     seaborn.heatmap(
-        data=cm,
+        data=cm_normalized,
         ax=ax,
         linewidths=0.1,
         cmap=cmap,
         yticklabels=classes,
         xticklabels=classes,
-        annot=True,
-        fmt='d'  # integer
+        annot=annot,
+        fmt='',
         cbar=True
-        normalize='true'
     )
     
     ax.set(title=title,
@@ -36,13 +44,13 @@ def plot_confusion_matrix(y_true, y_pred, classes, accuracy, epoch, title=None, 
 
     plt.tight_layout()
     # Save figure as SVG with epoch number
-    filename = f"confusion_matrix_epoch_{epoch}.svg"
+    filename = f"confusion_matrix_epoch{epoch}.svg"
     plt.savefig(filename)
     print(f"[LOG] Confusion Matrix saved to {filename}")
     plt.close()
 
     
-def plot_and_save(self, inputs, labels, cams, annotation):
+def plot_cam_1d(inputs, labels, cams, annotation, channel_labels, epoch):
     each_labels, indices = np.unique(labels.detach().cpu().numpy(), return_index=True)
     channel_num = inputs.size(1)
     target_size = inputs.size(3)
@@ -65,11 +73,11 @@ def plot_and_save(self, inputs, labels, cams, annotation):
 
             axs[i].plot(input_data[i], label='Input Signal', color='black', alpha=0.7)
             axs[i].scatter(np.arange(len(cam_data)), input_data[i], color=colors, s=point_sizes, label='CAM')
-            axs[i].set_title(f'{self.channel_labels[i]}')
+            axs[i].set_title(f'{channel_labels[i]}')
         axs[0].legend(loc='upper right')
         plt.title(f'Label: {annotation[labels[label_idx].item()]}')
         plt.tight_layout()
-        filename = f"cam_{self.plot_epoch}_{annotation[labels[label_idx]]}.svg"
+        filename = f"cam_epoch{epoch}_{annotation[labels[label_idx]]}.svg"
         plt.savefig(filename)
         plt.close()
     print(f"[LOG] class activation map is saved")

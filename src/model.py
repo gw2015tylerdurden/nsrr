@@ -4,7 +4,7 @@ import torch.nn as nn
 import numpy as np
 from tqdm import tqdm
 from .base import ModelBase, TrainingRoutineBase
-from .plots import plot_confusion_matrix, plot_1d_cam
+from .plots import plot_confusion_matrix, plot_cam_1d
 from .utils import remove_padding_data, add_padding_data
 from .cam1d import GradCAM1D
 from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
@@ -145,7 +145,7 @@ class ModelTrainingRoutine(TrainingRoutineBase):
             cams.append(result)
 
         # plot inputs and sequence_cam
-        plot_1d_cam(inputs, labels, np.array(cams), annotation_labels)
+        plot_cam_1d(inputs, labels, np.array(cams), annotation_labels, self.channel_labels, self.plot_epoch)
         return
 
 
@@ -217,7 +217,7 @@ class ModelTrainingRoutine(TrainingRoutineBase):
 
                 self.plot_cam_result(inputs, labels, annotation_labels, model_file)
 
-                epoch_loss /= len(test_loader.dataset)
+                epoch_loss = test_loss / len(test_loader.dataset)
                 accuracy = 100. * correct / len(test_loader.dataset)
                 if self.wandb is not None:
                     self.wandb.update(test_loss=epoch_loss, acuuracy=accuracy)
