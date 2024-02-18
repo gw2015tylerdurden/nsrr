@@ -1,37 +1,38 @@
 hydra:
   run:
     dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
-model_dir: models
+model_dir: ./models
 
 original_dataset_path: ~/workspace/nsrr/shhs/polysomnography/
-creation_dataset_path: ~/workspace/nsrr/data/
+#creation_dataset_path: ~/workspace/nsrr/data16bit/
+creation_dataset_path: ~/workspace/nsrr/data2/
 
 verbose: True
 
-datasets: ['shhs2']  #datasets: ['shhs1', 'shhs2']
+datasets: ['shhs1']  #datasets: ['shhs1', 'shhs2']
 
 # https://github.com/nsrr/edf-editor-translator/blob/master/configuration/nsrr-psg-events-compumedics-mapping.csv
 annotation_labels: ['Wake', 'Stage 1 sleep', 'Stage 2 sleep', 'Stage 3 sleep', 'Stage 4 sleep', 'REM sleep']
-channel_labels: ['SaO2', 'THOR RES', 'ABDO RES', 'AIRFLOW']
-fs_channels: [1.0, 10.0, 10.0, 10.0]
+# channel_labels: ['SaO2', 'THOR RES', 'ABDO RES', 'AIRFLOW']
+# fs_channels: [1.0, 10.0, 10.0, 10.0]
+channel_labels: ['EEG(sec)', 'EEG', 'ECG', 'EMG']
+fs_channels: [125, 125, 125, 125]
+
 
 output_shhs_datainfo_csv: False  # set True when first run
-debug_plots_interval: None  # 200000
+debug_plots_interval: None #200000
 duration: 30.0
 seed: 128
 in_channels: 4
 train_size: 0.7
-lr: 5e-4
-num_epoch: 1000
-batch_size: 128
+lr: 1e-3
+num_epoch: 100
+batch_size: 1024
 num_train_step: 100
-save_itvl: 50
-eval_itvl: 5
+save_itvl: 5 #50
+test_itvl: 5
 
-
-gpu:
-  train: 0
-  eval: 1
+gpu: 2
 
 # for evaluation
 trained_model_file: test.pt

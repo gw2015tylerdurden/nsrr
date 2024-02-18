@@ -4,7 +4,7 @@ import torch.nn as nn
 import numpy as np
 from tqdm import tqdm
 from .base import ModelBase, TrainingRoutineBase
-from .confutsion_matrix import plot_confusion_matrix
+from .plots import plot_confusion_matrix, plot_1d_cam
 from .utils import remove_padding_data, add_padding_data
 from .cam1d import GradCAM1D
 from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
@@ -127,37 +127,27 @@ class ModelTrainingRoutine(TrainingRoutineBase):
         self.save_itvl = args.save_itvl
         self.test_itvl = args.test_itvl
         self.model_dir = args.model_dir
+        self.channel_labels = args.channel_labels
+        self.fs_channels = args.fs_channels
 
 
-    def __plot_cam_result(self, inputs, labels, annotation_labels):
-        sequence_cam = []
+    def plot_cam_result(self, inputs, labels, annotation_labels, model_file):
+        cams = []
         # set cam targets as the correct label
         targets = [ClassifierOutputTarget(i.item()) for i in labels]
-        for feature in self.model.features:
+        reload_model = ModelCNN(len(annotation_labels), self.fs_channels, None)
+
+        for feature in reload_model.features:
+            reload_model.load_state_dict(torch.load(model_file))
             last_layer = [feature[-1]]
-            #cam = GradCAM1D(model=self.model, target_layers=self.model.features)
-            #cam = GradCAM1D(model=self.model, target_layers=feature)
-            cam = GradCAM1D(model=self.model, target_layers=last_layer)
-            sequence_cam.append(cam(input_tensor=inputs, targets=targets))
+            cam = GradCAM1D(model=reload_model, target_layers=last_layer)
+            result = cam(input_tensor=inputs, targets=targets)
+            cams.append(result)
 
         # plot inputs and sequence_cam
-        self.__plot_and_save(inputs[0], sequence_cam[0], annotation_labels[labels[0]])
+        plot_1d_cam(inputs, labels, np.array(cams), annotation_labels)
         return
 
-    def __plot_and_save(self, input, cam, annotation):
-        import matplotlib.pyplot as plt
-        channel_num = input.size(0)
-        fig, axs = plt.subplots(channel_num, 2, figsize=(10, 2))
-        for i in range(channel_num):
-            axs[i, 0].plot(input[i].squeeze().detach().cpu().numpy())
-            axs[i, 0].set_title(f'Channel {i+1} - Label: {annotation}')
-
-            # Plot CAM
-            cam_data = cam[i].squeeze()
-            im = axs[i, 1].imshow(cam_data[np.newaxis, :], aspect='auto', cmap='jet')
-            axs[i, 1].set_title('CAM Result')
-        plt.tight_layout()
-        plt.show()
 
     def run(self, dataset, annotation_labels, channel_labels, num_epoch, batch_size, train_size=0.7):
         train_dataset, test_dataset = dataset.split(size=train_size)
@@ -180,9 +170,11 @@ class ModelTrainingRoutine(TrainingRoutineBase):
         self.model = self.model.to(self.device)
 
         for epoch in range(num_epoch):
+            self.plot_epoch = epoch + 1
+
             self.model.train()
             running_loss = 0.0
-            pbar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{num_epoch}", dynamic_ncols=True)
+            pbar = tqdm(train_loader, desc=f"Epoch {self.plot_epoch}/{num_epoch}", dynamic_ncols=True)
             for inputs, labels in pbar:
                 inputs, labels = inputs.to(self.device), labels.to(self.device)
 
@@ -199,10 +191,10 @@ class ModelTrainingRoutine(TrainingRoutineBase):
 
             if self.wandb is not None:
                 self.wandb.update(train_loss=epoch_loss)
-            print(f"[LOG] Epoch {epoch + 1}/{num_epoch} - Loss: {epoch_loss:.4f}")
+            print(f"[LOG] Epoch {self.plot_epoch}/{num_epoch} - Loss: {epoch_loss:.4f}")
 
             if epoch % self.save_itvl == 0:
-                model_file = f"model_e{epoch + 1}.pt"
+                model_file = f"model_e{self.plot_epoch}.pth"
                 #torch.save(self.model.state_dict(), os.path.join(self.model_dir, model_file))
                 torch.save(self.model.state_dict(),  model_file)
                 print(f"[LOG] Model parameters are saved to {model_file}.")
@@ -223,15 +215,15 @@ class ModelTrainingRoutine(TrainingRoutineBase):
                         all_true_labels.extend(labels.cpu().numpy())
                         correct += predicted.eq(labels).sum().item()
 
-                self.__plot_cam_result(inputs, labels, annotation_labels)
+                self.plot_cam_result(inputs, labels, annotation_labels, model_file)
 
                 epoch_loss /= len(test_loader.dataset)
                 accuracy = 100. * correct / len(test_loader.dataset)
                 if self.wandb is not None:
                     self.wandb.update(test_loss=epoch_loss, acuuracy=accuracy)
 
-                print(f"[LOG] Test Loss after Epoch {epoch + 1}: {epoch_loss:.4f}")
-                print(f"[LOG] Test Accuracy after Epoch {epoch + 1}: {accuracy:.2f}%\n")
+                print(f"[LOG] Test Loss after Epoch {self.plot_epoch}: {epoch_loss:.4f}")
+                print(f"[LOG] Test Accuracy after Epoch {self.plot_epoch}: {accuracy:.2f}%\n")
 
                 # Compute and plot confusion matrix
-                plot_confusion_matrix(np.array(all_true_labels), np.array(all_predictions), classes=annotation_labels, accuracy=accuracy, epoch=epoch)
+                plot_confusion_matrix(np.array(all_true_labels), np.array(all_predictions), classes=annotation_labels, accuracy=accuracy, epoch=self.plot_epoch)
