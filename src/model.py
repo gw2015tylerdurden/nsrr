@@ -214,9 +214,6 @@ class ModelTrainingRoutine(TrainingRoutineBase):
                         all_predictions.extend(predicted.cpu().numpy())
                         all_true_labels.extend(labels.cpu().numpy())
                         correct += predicted.eq(labels).sum().item()
-
-                self.plot_cam_result(inputs, labels, annotation_labels, model_file)
-
                 epoch_loss = test_loss / len(test_loader.dataset)
                 accuracy = 100. * correct / len(test_loader.dataset)
                 if self.wandb is not None:
@@ -224,6 +221,9 @@ class ModelTrainingRoutine(TrainingRoutineBase):
 
                 print(f"[LOG] Test Loss after Epoch {self.plot_epoch}: {epoch_loss:.4f}")
                 print(f"[LOG] Test Accuracy after Epoch {self.plot_epoch}: {accuracy:.2f}%\n")
+
+                # plot 1 batch
+                self.plot_cam_result(inputs, labels, annotation_labels, model_file)
 
                 # Compute and plot confusion matrix
                 plot_confusion_matrix(np.array(all_true_labels), np.array(all_predictions), classes=annotation_labels, accuracy=accuracy, epoch=self.plot_epoch)

@@ -4,6 +4,7 @@ from torch.utils.data import Dataset
 from sklearn.model_selection import train_test_split
 from torch.nn.utils.rnn import pad_sequence
 import h5py
+import ast
 
 class ShhsDataset(Dataset):
     def __init__(self, h5_files):
@@ -51,10 +52,10 @@ class ShhsDataset(Dataset):
         )
 
         train_dataset = copy.copy(self)
-        train_dataset.dataset_info = [self.dataset_keys[i] for i in train_idx]
+        train_dataset.dataset_keys = [self.dataset_keys[i] for i in train_idx]
 
         test_dataset = copy.copy(self)
-        test_dataset.dataset_info = [self.dataset_keys[i] for i in test_idx]
+        test_dataset.dataset_keys = [self.dataset_keys[i] for i in test_idx]
 
         return train_dataset, test_dataset
 

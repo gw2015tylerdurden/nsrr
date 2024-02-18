@@ -6,7 +6,7 @@ from sklearn.metrics import confusion_matrix
 from scipy.interpolate import interp1d
 from sklearn.preprocessing import normalize
 
-matplotlib.use('TkAgg')
+matplotlib.use('Agg')
 plt.rcParams['text.color'] = 'black'
 plt.rcParams['axes.labelcolor'] = 'black'
 plt.rcParams['xtick.color'] = 'black'
