@@ -8,6 +8,7 @@ from pytorch_grad_cam.utils.svd_on_activations import get_2d_projection
 class BaseCAM1D(pytorch_grad_cam.base_cam.BaseCAM):
     def __init__(self, *args, **kwargs):
         super(BaseCAM1D, self).__init__(*args, **kwargs)
+        self.alpha = []
 
     def get_target_width_height(self,
                                 input_tensor: torch.Tensor):
@@ -45,5 +46,7 @@ class GradCAM1D(BaseCAM1D):
                         target_category,
                         activations,
                         grads):
-        return np.mean(grads, axis=2)  # modified for 1D
-
+        # modified for 1D
+        weights = np.mean(grads, axis=2)
+        self.alpha = weights
+        return weights

@@ -10,6 +10,9 @@ def main(args):
                           output_csv=args.output_shhs_datainfo_csv,
                           verbose=args.verbose)
 
+    if args.output_shhs_datainfo_csv is True:
+        shhs.generate_annot_counts_csv()
+
     shhs.create_target_fs_dataset_h5(args.channel_labels,
                                      fs_channels=args.fs_channels,
                                      target_fs=None,

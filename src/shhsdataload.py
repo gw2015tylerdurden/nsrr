@@ -11,6 +11,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import torch
 from torch.nn.utils.rnn import pad_sequence
+from omegaconf import ListConfig
 
 
 class ShhsDataLoader:
@@ -128,7 +129,7 @@ class ShhsDataLoader:
                 if 'hf' in locals() and hf is not None:
                     # write data information when closing h5 file
                     hf.create_dataset(f"fs_channels", data=self.fs_channels, dtype=np.float32)
-                    hf.create_dataset(f"channels", data=str(self.channel_labels))
+                    hf.create_dataset(f"channels", data=str(self.channel_labels[0]) if isinstance(self.channel_labels, list) else str(self.channel_labels))
                     hf.create_dataset(f"target_fs", data=str(target_fs))
                     hf.create_dataset(f"annotation_labels", data=str(self.annotation_labels))
                     hf.close()
@@ -142,12 +143,14 @@ class ShhsDataLoader:
 
             signal_list, label_list = self.__preprocessing(xml_file, fs_channels, signals, target_fs, total_count)
 
+            # for save variable length signals in h5
+            # pyedflib.readSignal returns float64, but original EDF has a 16 bit data format 
+            dtype_variable_length_float = h5py.special_dtype(vlen=np.dtype('float16'))
+            patient_no = f"{os.path.splitext(os.path.basename(edf_file))[0]}"
             for (signal, label) in zip(signal_list, label_list):
                 dataset_name = f"shhs{total_count}"
-                padding_signal = pad_sequence([torch.tensor(s) for s in signal],  batch_first=True, padding_value=float('nan'))
-                # pyedflib.readSignal returns float64, but original EDF has a 16 bit data format 
-                hf.create_dataset(f"{dataset_name}/signal", data=padding_signal.numpy(), dtype=np.float16, chunks=True)
-                hf.create_dataset(f"{dataset_name}/label", data=label, dtype=np.uint8)
+                hf.create_dataset(f"{patient_no}/{dataset_name}/signal", data=signal, dtype=dtype_variable_length_float)
+                hf.create_dataset(f"{patient_no}/{dataset_name}/label", data=label, dtype=np.uint8)
                 total_count += 1
 
         if 'hf' in locals() and hf is not None:
@@ -215,6 +218,15 @@ class ShhsDataLoader:
             padding_signals.append(padding_signal)
         return padding_signals
 
+    def __is_all_channel_included(self, edf_channels):
+        for label in self.channel_labels:
+            if isinstance(label, ListConfig) or isinstance(label, list):
+                if not any(item in edf_channels for item in label):
+                    return False
+            else:
+                if label not in edf_channels:
+                    return False
+        return True
 
     def __load_edf_file_target_channel(self, edf_file):
         fs = []
@@ -223,12 +235,20 @@ class ShhsDataLoader:
         with pyedflib.EdfReader(edf_file) as f:
             # load all channel labels
             edf_channels = f.getSignalLabels()
-            if not all(label in edf_channels for label in self.channel_labels):
+            if not self.__is_all_channel_included(edf_channels):
                 # lack target channel in xml
                 return False, None, None
 
             for target_label in self.channel_labels:
-                channel_idx = edf_channels.index(target_label)
+                if isinstance(target_label, ListConfig) or isinstance(target_label, list):
+                    for i in target_label:
+                        try:
+                            channel_idx = edf_channels.index(i)
+                            break
+                        except:
+                            continue
+                else:
+                    channel_idx = edf_channels.index(target_label)
                 fs.append(f.samplefrequency(channel_idx))
                 signals.append(f.readSignal(channel_idx))
 
