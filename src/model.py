@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from .utils import remove_padding_data, add_padding_data
+from .utils import remove_padding_batch_data, add_padding_batch_data
 from .base import ModelBase
 
 '''
@@ -59,6 +59,7 @@ class ModelCNN(ModelBase):
     def __init__(self, num_classes, fs_channels, feature_size=5):
         super().__init__()
         one_channel = 1
+        fc_size = int(64 * len(fs_channels) * feature_size)
         self.features = nn.ModuleList()
 
         for fs in fs_channels:
@@ -79,7 +80,7 @@ class ModelCNN(ModelBase):
             ))
 
         self.classifier = nn.Sequential(
-            nn.Linear(64 * 24960 * len(fs_channels), 256),
+            nn.Linear(fc_size, 256),
             nn.GELU(),
             nn.Dropout(0.5),
             nn.Linear(256, num_classes)
@@ -89,7 +90,7 @@ class ModelCNN(ModelBase):
         features = []
         for i, layers in enumerate(self.features):
             channel_data = x[:, i, :, :]
-            signal = remove_padding_data(channel_data)
+            signal = remove_padding_batch_data(channel_data)
             features.append(layers(signal))
 
         # flatten

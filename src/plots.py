@@ -5,13 +5,9 @@ import seaborn
 from sklearn.metrics import confusion_matrix
 from scipy.interpolate import interp1d
 from sklearn.preprocessing import normalize
+from .utils import remove_padding_data
 
 matplotlib.use('Agg')
-plt.rcParams['text.color'] = 'black'
-plt.rcParams['axes.labelcolor'] = 'black'
-plt.rcParams['xtick.color'] = 'black'
-plt.rcParams['ytick.color'] = 'black'
-
 
 def plot_confusion_matrix(y_true, y_pred, classes, accuracy, epoch, title=None, cmap=plt.cm.Blues):
     if not title:
@@ -63,18 +59,19 @@ def plot_cam_1d(inputs, labels, cams, annotation, channel_labels, fs_channels, e
 
     for label_idx in indices:
         fig, axs = plt.subplots(channel_num, 1, figsize=(18, 2 * channel_num))
-        input_data = inputs[label_idx].squeeze().detach().cpu().numpy()
+        data = inputs[label_idx].squeeze()
+        all_channel_cam = cams[:, label_idx, :].squeeze()
 
         for i in range(channel_num):
-            target_size = len(input_data[i])
+            input_data = remove_padding_data(data[i]).detach().cpu().numpy()
+            target_size = len(input_data)
             time = np.linspace(0,  target_size / fs_channels[i], target_size)
-            all_channel_cam = cams[i].squeeze()
-            cam_data_normalized = (cams[i][label_idx].squeeze() - np.min(all_channel_cam)) / (np.max(all_channel_cam) - np.min(all_channel_cam))
+            cam_data_normalized = (all_channel_cam[i] - np.min(all_channel_cam)) / (np.max(all_channel_cam) - np.min(all_channel_cam))
             cam_data = scale_cam_1d(cam_data_normalized, target_size)
             point_sizes = 10
 
-            axs[i].plot(time, input_data[i], label='Input Signal', color='black', alpha=0.2)
-            scatter = axs[i].scatter(time, input_data[i], c=cam_data, cmap='jet', s=point_sizes)
+            axs[i].plot(time, input_data, label='Input Signal', color='black', alpha=0.2)
+            scatter = axs[i].scatter(time, input_data, c=cam_data, cmap='jet', s=point_sizes)
             axs[i].set_title(f'{channel_labels[i]}')
         fig.subplots_adjust(hspace=0.5, right=0.85)
         fig.colorbar(scatter, ax=axs.ravel().tolist(), orientation='vertical', pad=0.01, aspect=20, cmap='jet')
@@ -86,11 +83,12 @@ def plot_cam_1d(inputs, labels, cams, annotation, channel_labels, fs_channels, e
     print(f"[LOG] class activation map is saved")
 
 
-def plot_sim(sim, channel_labels, annotation, epoch):
+def plot_sim(sim, channel_labels, annotation, label_counts, epoch):
     sim_with_siv = np.hstack((sim, np.mean(sim, axis=1, keepdims=True)))
     annotation = annotation + ['SIV']
-    #sim_normalized = (sim_with_svg - np.min(sim_with_svg)) / (np.max(sim_with_svg) - np.min(sim_with_svg))
-    sim_normalized = sim_with_siv
+    min_vals = np.min(sim_with_siv, axis=0)
+    max_vals = np.max(sim_with_siv, axis=0)
+    sim_normalized = (sim_with_siv - min_vals) / (max_vals - min_vals)
 
     fig, ax = plt.subplots(figsize=(12, 8))
     seaborn.heatmap(sim_normalized, cmap='viridis', ax=ax, annot=True, fmt=".2f")
@@ -102,10 +100,14 @@ def plot_sim(sim, channel_labels, annotation, epoch):
     ax.xaxis.set_ticks_position('bottom')
     ax.yaxis.set_ticks_position('left')
 
+    # plot label_counts
+    ax2 = ax.twiny()
+    ax2.set_xlim(ax.get_xlim())
+    ax2.set_xticks(np.arange(len(annotation)) + 0.5)
+    ax2.set_xticklabels(np.append(label_counts, ''), rotation=0, ha='right')
+
     plt.title(f'Signal Importance Matrix', pad=20)
     plt.tight_layout()
-    plt.show()
-
     # Save figure as SVG with epoch number
     filename = f"signals_importance_matrix_epoch{epoch}.svg"
     plt.savefig(filename)

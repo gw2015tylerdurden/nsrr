@@ -7,6 +7,7 @@ original_dataset_path: ~/workspace/nsrr/shhs/polysomnography/
 creation_dataset_path: ~/workspace/nsrr/data13ch/
 
 verbose: True
+is_debug: True
 
 datasets: ['shhs1', 'shhs2']
 
@@ -25,7 +26,7 @@ seed: 128
 train_size: 0.7
 lr: 1e-3
 num_epoch: 100
-batch_size: 2 #512
+batch_size: 512
 num_train_step: 100
 save_itvl: 5 #50
 test_itvl: 5

@@ -16,24 +16,27 @@ class ModelTrainingRoutine(TrainingRoutineBase):
         self.channel_labels = args.channel_labels
         self.fs_channels = args.fs_channels
         self.threshold_calc_sim_epochs = args.threshold_calc_sim_epochs
+        self.is_debug = args.is_debug
 
 
     def run(self, dataset, annotation_labels, channel_labels, num_epoch, batch_size, train_size=0.7):
-        train_dataset, test_dataset = dataset.balance_dataset(train_data_num=10,
-                                                              test_data_num=10)
+        train_dataset, test_dataset = dataset.balance_dataset(train_data_num=2000,
+                                                              test_data_num=1000)
         train_loader = torch.utils.data.DataLoader(
             train_dataset,
             batch_size=batch_size,
-            num_workers=0, #num_workers=os.cpu_count(), # main cpu threads_num
-            pin_memory=False, #pin_memory=True,
+            shuffle=True,
+            num_workers=0 if self.is_debug else os.cpu_count(), # main cpu threads_num
+            pin_memory=False if self.is_debug else True,
             drop_last=True,
         )
 
         test_loader = torch.utils.data.DataLoader(
             test_dataset,
             batch_size=batch_size,
-            num_workers=os.cpu_count(),
-            pin_memory=True,
+            shuffle=False,
+            num_workers=0 if self.is_debug else os.cpu_count(),
+            pin_memory=False if self.is_debug else True,
             drop_last=False,
         )
 
@@ -94,8 +97,8 @@ class ModelTrainingRoutine(TrainingRoutineBase):
                 print(f"[LOG] Test Loss after Epoch {self.plot_epoch}: {epoch_loss:.4f}")
                 print(f"[LOG] Test Accuracy after Epoch {self.plot_epoch}: {accuracy:.2f}%\n")
 
-                if epoch >= self.threshold_calc_sim_epochs:
-                    cam_calc.plot_sim_result(test_loader, all_predictions)
+                #if epoch >= self.threshold_calc_sim_epochs:
+                cam_calc.plot_sim_result(test_loader, all_predictions)
                 cam_calc.plot_cam(test_loader)
 
                 # Compute and plot confusion matrix

@@ -3,7 +3,7 @@ import numpy as np
 from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 from .cam1d import GradCAM1D
 from .model import ModelCNN
-from .plots import plot_cam_1d
+from .plots import plot_cam_1d, plot_sim
 
 
 class CamCalculator():
@@ -15,10 +15,11 @@ class CamCalculator():
         self.channel_labels = channel_labels
         self.epoch = epoch
 
-    def plot_sim_result(self, data_loader):
-        sim, label_counts = self.calc_signals_importance_matrix(data_loader)
+    def plot_sim_result(self, data_loader, all_predictions):
+        sim, label_counts = self.calc_signals_importance_matrix(data_loader, all_predictions)
         np.save(f'signal_importance_matrix_epoch{self.epoch}.npy', sim)
         np.save(f'label_counts{self.epoch}.npy', label_counts)
+        plot_sim(sim, self.channel_labels, self.annotation_labels, label_counts, self.epoch)
 
 
     def calc_signals_importance_matrix(self, data_loader, all_predictions):
@@ -32,7 +33,7 @@ class CamCalculator():
             inputs, labels = inputs.to(self.device), labels.to(self.device)
 
             targets = [ClassifierOutputTarget(i.item()) for i in all_predictions]
-            reload_model = ModelCNN(len(self.annotation_labels), self.fs_channels, None)
+            reload_model = ModelCNN(len(self.annotation_labels), self.fs_channels)
 
             for channel_idx, feature in enumerate(reload_model.features):
                 reload_model.load_state_dict(torch.load(self.model_file))
@@ -62,7 +63,7 @@ class CamCalculator():
             # set cam targets as the correct label
             targets = [ClassifierOutputTarget(i.item()) for i in labels]
 
-            reload_model = ModelCNN(len(self.annotation_labels), self.fs_channels, None)
+            reload_model = ModelCNN(len(self.annotation_labels), self.fs_channels)
 
             cams = []
             for feature in reload_model.features:

@@ -86,11 +86,13 @@ class ShhsDataset(Dataset):
         for (file, patient), events in train_balanced_data_map.items():
             for event in events:
                 train_keys.append((file, patient, event))
+        np.random.shuffle(train_keys)
 
         test_balanced_data_map, _ = self.__collect_balanced_data(test_data_num, used_patients)
         for (file, patient), events in test_balanced_data_map.items():
             for event in events:
                 test_keys.append((file, patient, event))
+        np.random.shuffle(test_keys)
 
         train_dataset.dataset_patient_keys = train_keys
         test_dataset.dataset_patient_keys = test_keys

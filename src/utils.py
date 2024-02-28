@@ -3,13 +3,19 @@ from torch.nn.utils.rnn import pad_sequence
 
 
 def remove_padding_data(x):
+    valid_data_mask = ~torch.isnan(x)
+    not_nan_data = torch.masked_select(x, valid_data_mask)
+    return not_nan_data
+
+
+def remove_padding_batch_data(x):
     batch, feat, sequence = x.shape
     valid_data_mask = ~torch.isnan(x)
     not_nan_data = torch.masked_select(x, valid_data_mask)
     return not_nan_data.reshape(batch, feat, -1)
 
 
-def add_padding_data(outputs):
+def add_padding_batch_data(outputs):
     batch_size = outputs[0].size(0)
     padded_outputs = []
     for batch in range(batch_size):
