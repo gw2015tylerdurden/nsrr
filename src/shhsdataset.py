@@ -18,15 +18,14 @@ class ShhsDataset(Dataset):
             file = h5py.File(h5_file, 'r')
             self.h5_file_objects.append(file)
             self.dataset_patient_keys.extend([(file, key) for key in file.keys() if "shhs" in key])
-            #tmp
-            break
+
         file = self.h5_file_objects[0]
         byte_string_to_list = lambda b: ast.literal_eval(b.decode('utf-8'))
         self.channels = byte_string_to_list(file["channels"][()])
         self.annotation_labels = byte_string_to_list(file["annotation_labels"][()])
         self.fs_channels = file["fs_channels"][:]
         self.target_fs = file["target_fs"][()]
-        
+
 
     def __len__(self):
         return len(self.dataset_patient_keys)
