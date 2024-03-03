@@ -66,8 +66,13 @@ def plot_cam_1d(inputs, labels, cams, annotation, channel_labels, fs_channels, e
             input_data = remove_padding_data(data[i]).detach().cpu().numpy()
             target_size = len(input_data)
             time = np.linspace(0,  target_size / fs_channels[i], target_size)
-            cam_data_normalized = (all_channel_cam[i] - np.min(all_channel_cam)) / (np.max(all_channel_cam) - np.min(all_channel_cam))
-            cam_data = scale_cam_1d(cam_data_normalized, target_size)
+            if np.max(all_channel_cam) != 0:
+                cam_data_normalized = (all_channel_cam[i] - np.min(all_channel_cam)) / (np.max(all_channel_cam) - np.min(all_channel_cam))
+                cam_data = scale_cam_1d(cam_data_normalized, target_size)
+            else:
+                cam_data = np.zeros(target_size)
+                print(f"[WARN] all class activation map is 0")
+
             point_sizes = 10
 
             axs[i].plot(time, input_data, label='Input Signal', color='black', alpha=0.2)

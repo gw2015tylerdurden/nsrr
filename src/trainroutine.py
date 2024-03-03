@@ -98,7 +98,7 @@ class ModelTrainingRoutine(TrainingRoutineBase):
                 print(f"[LOG] Test Accuracy after Epoch {self.plot_epoch}: {accuracy:.2f}%\n")
 
                 #if epoch >= self.threshold_calc_sim_epochs:
-                cam_calc.plot_sim_result(test_loader, all_predictions)
+                #cam_calc.plot_sim_result(test_loader, all_predictions)
                 cam_calc.plot_cam(test_loader)
 
                 # Compute and plot confusion matrix

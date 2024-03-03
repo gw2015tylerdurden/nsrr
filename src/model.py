@@ -56,28 +56,26 @@ class MaxPool1dDifferentSamplingFreq(nn.Module):
 '''
 
 class ModelCNN(ModelBase):
-    def __init__(self, num_classes, fs_channels, feature_size=10):
+    def __init__(self, num_classes, fs_channels, feature_size=100):
         super().__init__()
         one_channel = 1
-        conv_feat_num = 256
+        conv_feat_num = 128
         fc_size = int(conv_feat_num * len(fs_channels) * feature_size)
         self.features = nn.ModuleList()
 
         for fs in fs_channels:
             self.features.append(nn.Sequential(
-                nn.Conv1d(one_channel, 32, kernel_size=5, stride=1, padding=2),
+                nn.Conv1d(one_channel, 16, kernel_size=5, stride=1, padding=2),
                 nn.GELU(),
                 nn.MaxPool1d(kernel_size=2, stride=2),
 
-                nn.Conv1d(32, 64, kernel_size=4, stride=1, padding=2),
+                nn.Conv1d(16, 32, kernel_size=4, stride=1, padding=2),
                 nn.GELU(),
-                nn.MaxPool1d(kernel_size=2, stride=2),
 
-                nn.Conv1d(64, 128, kernel_size=3, stride=1, padding=1),
+                nn.Conv1d(32, 64, kernel_size=4, stride=1, padding=1),
                 nn.GELU(),
-                nn.MaxPool1d(kernel_size=2, stride=1),
 
-                nn.Conv1d(128, conv_feat_num, kernel_size=2, stride=1, padding=1),
+                nn.Conv1d(64, conv_feat_num, kernel_size=3, stride=1, padding=1),
                 nn.GELU(),
 
                 nn.AdaptiveAvgPool1d(feature_size)

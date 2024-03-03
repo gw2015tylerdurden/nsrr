@@ -22,7 +22,7 @@ def main(args):
 
     routine = ModelTrainingRoutine(model, args)
 
-    #routine.wandb_init(args)
+    routine.wandb_init(args)
     routine.run(dataset,
                 annotation_labels,
                 channels,
