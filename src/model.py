@@ -56,7 +56,7 @@ class MaxPool1dDifferentSamplingFreq(nn.Module):
 '''
 
 class ModelCNN(ModelBase):
-    def __init__(self, num_classes, fs_channels, feature_size=100):
+    def __init__(self, num_classes, fs_channels, feature_size=50):
         super().__init__()
         one_channel = 1
         conv_feat_num = 128
@@ -65,14 +65,16 @@ class ModelCNN(ModelBase):
 
         for fs in fs_channels:
             self.features.append(nn.Sequential(
-                nn.Conv1d(one_channel, 16, kernel_size=5, stride=1, padding=2),
+                nn.Conv1d(one_channel, 16, kernel_size=3, stride=1, padding=2),
                 nn.GELU(),
                 nn.MaxPool1d(kernel_size=2, stride=2),
 
-                nn.Conv1d(16, 32, kernel_size=4, stride=1, padding=2),
+                nn.Conv1d(16, 32, kernel_size=3, stride=1, padding=2),
+                nn.MaxPool1d(kernel_size=2, stride=2),
                 nn.GELU(),
 
-                nn.Conv1d(32, 64, kernel_size=4, stride=1, padding=1),
+                nn.Conv1d(32, 64, kernel_size=3, stride=1, padding=1),
+                nn.MaxPool1d(kernel_size=2, stride=2),
                 nn.GELU(),
 
                 nn.Conv1d(64, conv_feat_num, kernel_size=3, stride=1, padding=1),
@@ -82,9 +84,10 @@ class ModelCNN(ModelBase):
             ))
 
         self.classifier = nn.Sequential(
-            nn.Linear(fc_size, 256),
+            nn.Linear(fc_size, fc_size//100),
             nn.GELU(),
             nn.Dropout(0.5),
+            nn.Linear(fc_size//100, 256),
             nn.Linear(256, num_classes)
         )
 

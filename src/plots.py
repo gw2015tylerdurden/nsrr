@@ -48,7 +48,7 @@ def plot_confusion_matrix(y_true, y_pred, classes, accuracy, epoch, title=None, 
 
 def plot_cam_1d(inputs, labels, cams, annotation, channel_labels, fs_channels, epoch):
     each_labels, indices = np.unique(labels.detach().cpu().numpy(), return_index=True)
-    channel_num = inputs.size(1)
+    channel_num = len(channel_labels)
 
     def scale_cam_1d(cam, target_size):
         x_old = np.linspace(0, 1, len(cam))

@@ -36,7 +36,7 @@ def main(args):
         drop_last=False,
     )
     #cam_calc.plot_cam(test_loader)
-    cam_calc.plot_sim_result(test_loader)
+    cam_calc.calc_sim_result(test_loader)
 
 if __name__ == '__main__':
     main()

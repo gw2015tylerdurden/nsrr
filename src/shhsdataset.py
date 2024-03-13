@@ -9,7 +9,7 @@ from collections import defaultdict
 import numpy as np
 
 class ShhsDataset(Dataset):
-    def __init__(self, h5_files):
+    def __init__(self, h5_files, pop_channels=None, replace_noise_channel_labels=None):
         self.h5_files = h5_files
         self.dataset_patient_keys = []
         self.h5_file_objects = []
@@ -21,10 +21,16 @@ class ShhsDataset(Dataset):
 
         file = self.h5_file_objects[0]
         byte_string_to_list = lambda b: ast.literal_eval(b.decode('utf-8'))
-        self.channels = byte_string_to_list(file["channels"][()])
         self.annotation_labels = byte_string_to_list(file["annotation_labels"][()])
-        self.fs_channels = file["fs_channels"][:]
         self.target_fs = file["target_fs"][()]
+        self.pop_channels = pop_channels
+        self.replace_noise_channel_labels = replace_noise_channel_labels
+
+        self.original_channels = byte_string_to_list(file["channels"][()])
+        self.original_fs_channels = file["fs_channels"][:]
+        if pop_channels is not None:
+            self.channels = [channel for i, channel in enumerate(self.original_channels) if i not in pop_channels]
+            self.fs_channels = [fs for i, fs in enumerate(self.original_fs_channels) if i not in pop_channels]            
 
 
     def __len__(self):
@@ -33,13 +39,30 @@ class ShhsDataset(Dataset):
 
     def __getitem__(self, idx):
         file, patient, event = self.dataset_patient_keys[idx]
-        signals = file[patient][event]['signal'][:]
+        original_signals = file[patient][event]['signal'][:]
         label = file[patient][event]['label'][()]
+        signals = self.__selelt_signals(original_signals)
 
         original_data = [torch.tensor(s, dtype=torch.float32) for s in signals]
         padding_data = pad_sequence(original_data, batch_first=True, padding_value=float('nan')).unsqueeze(1)
         label = torch.tensor(label)
         return padding_data, label
+
+    def __selelt_signals(self, original_signals):
+        signals = []
+        for i, channel_label in enumerate(self.original_channels):
+            if not self.pop_channels is None and channel_label in self.pop_channels:
+                # pop channel
+                continue
+            else:
+                # Replace specified channels with noise
+                if not self.replace_noise_channel_labels is None and channel_label in self.replace_noise_channel_labels:
+                    signal = np.random.normal(0, 1, len( original_signals[i]))
+                else:
+                    signal = original_signals[i]
+
+                signals.append(signal)
+        return signals
 
 
     def get_dataset_info(self):

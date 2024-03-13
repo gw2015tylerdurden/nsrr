@@ -15,11 +15,14 @@ class CamCalculator():
         self.channel_labels = channel_labels
         self.epoch = epoch
 
-    def plot_sim_result(self, data_loader, all_predictions):
+    def calc_sim_result(self, data_loader, all_predictions):
         sim, label_counts = self.calc_signals_importance_matrix(data_loader, all_predictions)
         np.save(f'signal_importance_matrix_epoch{self.epoch}.npy', sim)
         np.save(f'label_counts{self.epoch}.npy', label_counts)
         plot_sim(sim, self.channel_labels, self.annotation_labels, label_counts, self.epoch)
+        # get signal importance vector (Eq. (3.14))
+        sim_vector = sim.mean(axis=1)
+        return np.argmin(sim_vector), np.argmax(sim_vector)
 
 
     def calc_signals_importance_matrix(self, data_loader, all_predictions):
