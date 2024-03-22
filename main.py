@@ -14,14 +14,15 @@ def main(args):
     pop_channels = []
     h5_files = glob.glob(os.path.expanduser(args.creation_dataset_path) + '*.h5')
 
-    for i in range(len(args.fs_channels)):
+    loop_count = 1
+    while True:
         # mkdir loop_${i}; mv loop_${i}
-        directory = f"loop_{i}"
+        directory = f"loop_{loop_count}"
         if not os.path.exists(directory):
             os.makedirs(directory)
         os.chdir(directory)
 
-        dataset = ShhsDataset(h5_files, pop_channels, args.replace_noise_channel_labels)
+        dataset = ShhsDataset(h5_files, pop_channels, args.add_noise_channel_fs)
         fs_channels, channels, _, annotation_labels = dataset.get_dataset_info()
 
         model = ModelCNN(num_classes=len(annotation_labels),
@@ -36,10 +37,16 @@ def main(args):
                                            args.batch_size,
                                            args.train_size
                                            )
-        pop_channels.append(s_min_idx)
+        pop_channels.append(channels[s_min_idx])
+
+        if loop_count >= len(fs_channels) - 1:
+            break
+        else:
+            loop_count += 1
 
         # cd ..
         os.chdir("..")
+    print(f"[LOG] pop channels: {pop_channels}")
 
 if __name__ == '__main__':
     main()

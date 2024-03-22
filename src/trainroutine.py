@@ -33,7 +33,7 @@ class ModelTrainingRoutine(TrainingRoutineBase):
             drop_last=True,
         )
 
-        test_loader = torch.utils.data.DataLoader(
+        validation_loader = torch.utils.data.DataLoader(
             test_dataset,
             batch_size=batch_size,
             shuffle=False,
@@ -43,6 +43,9 @@ class ModelTrainingRoutine(TrainingRoutineBase):
         )
 
         self.model = self.model.to(self.device)
+        best_validation_score = 0.0
+        best_model_file = None
+        best_epoch = 0
 
         for epoch in range(num_epoch):
             self.plot_epoch = epoch + 1
@@ -80,10 +83,9 @@ class ModelTrainingRoutine(TrainingRoutineBase):
                 correct = 0
                 all_predictions = []
                 all_true_labels = []
-                cam_calc = CamCalculator(model_file, self.device, self.annotation_labels, self.fs_channels, self.channel_labels, self.plot_epoch)
                 with torch.no_grad():
                     total_loss_mean = 0.0
-                    for inputs, labels in test_loader:
+                    for inputs, labels in validation_loader:
                         inputs, labels = inputs.to(self.device), labels.to(self.device)
                         outputs = self.model(inputs).detach()
                         loss = self.criterion(outputs, labels)
@@ -93,17 +95,25 @@ class ModelTrainingRoutine(TrainingRoutineBase):
                         all_true_labels.extend(labels.cpu().numpy())
                         correct += predicted.eq(labels).sum().item()
 
-                accuracy = 100. * correct / len(test_loader.dataset)
+                accuracy = 100. * correct / len(validation_loader.dataset)
                 if self.wandb is not None:
-                    self.wandb.update(test_loss=total_loss_mean / len(test_loader.dataset), acuuracy=accuracy)
+                    self.wandb.update(test_loss=total_loss_mean / len(validation_loader.dataset), acuuracy=accuracy)
 
-                print(f"[LOG] Test Loss after Epoch Epoch {self.plot_epoch}/{num_epoch} - Loss: {total_loss_mean / len(test_loader.dataset):.4f}")
+                if accuracy > best_validation_score:
+                    best_validation_score = accuracy
+                    best_model_file = model_file
+                    best_epoch = self.plot_epoch
+                    # Compute and plot confusion matrix
+                    plot_confusion_matrix(np.array(all_true_labels), np.array(all_predictions), classes=self.annotation_labels, accuracy=accuracy, epoch=best_epoch)
+
+                print(f"[LOG] Test Loss after Epoch Epoch {self.plot_epoch}/{num_epoch} - Loss: {total_loss_mean / len(validation_loader.dataset):.4f}")
                 print(f"[LOG] Test Accuracy after Epoch {self.plot_epoch}: {accuracy:.2f}%\n")
 
-                cam_calc.plot_cam(test_loader)
+        if self.wandb is not None:
+            self.wandb.update(best_iteration_accuracy=best_validation_score)
 
-                # Compute and plot confusion matrix
-                plot_confusion_matrix(np.array(all_true_labels), np.array(all_predictions), classes=self.annotation_labels, accuracy=accuracy, epoch=self.plot_epoch)
+        cam_calc = CamCalculator(best_model_file, self.device, self.annotation_labels, self.fs_channels, self.channel_labels, best_epoch)
+        cam_calc.plot_cam(validation_loader)
+        s_min_idx, s_max_idx = cam_calc.calc_sim_result(validation_loader, all_predictions)
 
-        s_min_idx, s_max_idx = cam_calc.calc_sim_result(test_loader, all_predictions)
         return s_min_idx, s_max_idx

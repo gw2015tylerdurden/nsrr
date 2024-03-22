@@ -65,11 +65,11 @@ class ModelCNN(ModelBase):
 
         for fs in fs_channels:
             self.features.append(nn.Sequential(
-                nn.Conv1d(one_channel, 16, kernel_size=3, stride=1, padding=2),
-                nn.GELU(),
+                nn.Conv1d(one_channel, 16, kernel_size=3, stride=1, padding=1),
                 nn.MaxPool1d(kernel_size=2, stride=2),
+                nn.GELU(),
 
-                nn.Conv1d(16, 32, kernel_size=3, stride=1, padding=2),
+                nn.Conv1d(16, 32, kernel_size=3, stride=1, padding=1),
                 nn.MaxPool1d(kernel_size=2, stride=2),
                 nn.GELU(),
 
@@ -78,8 +78,6 @@ class ModelCNN(ModelBase):
                 nn.GELU(),
 
                 nn.Conv1d(64, conv_feat_num, kernel_size=3, stride=1, padding=1),
-                nn.GELU(),
-
                 nn.AdaptiveAvgPool1d(feature_size)
             ))
 
