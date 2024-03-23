@@ -1,6 +1,6 @@
 hydra:
   run:
-    dir: outputs/seed${seed}
+    dir: outputs/seed${seed}-lr${lr}
 model_dir: ./models/
 
 original_dataset_path: ~/workspace/nsrr/shhs/polysomnography/
@@ -28,15 +28,15 @@ num_epoch: 100
 balanced_train_num: 2000
 balanced_test_num: 1000
 
-batch_size: 512
+batch_size: 32
 num_train_step: 100
 save_itvl: 5 #50
 test_itvl: 5
 
-gpu: 1
+gpu: 3
 
 wandb:
   project: nsrr
-  group: sleep-stage
+  group: sleep-stage-test
   name: trial
   cwd: current_work_directory

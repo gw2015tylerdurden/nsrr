@@ -27,7 +27,7 @@ def main(args):
 
         model = ModelCNN(num_classes=len(annotation_labels),
                          fs_channels=fs_channels
-                         )
+                         ).model_instance
 
         routine = ModelTrainingRoutine(model, fs_channels, channels, annotation_labels, args)
         routine.wandb_init(args)
