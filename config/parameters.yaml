@@ -7,7 +7,7 @@ original_dataset_path: ~/workspace/nsrr/shhs/polysomnography/
 creation_dataset_path: ~/workspace/nsrr/data13ch/
 
 verbose: True
-is_debug: True
+is_debug: False
 
 datasets: ['shhs1', 'shhs2']
 
@@ -21,22 +21,23 @@ fs_channels:    [1.0,       1.0,                                    125.0, 125.0
 output_shhs_datainfo_csv: False  # set True when first run
 debug_plots_interval: 200000 #None 
 duration: 30.0
-seed: 140
-train_size: 0.7
-lr: 1e-4
-num_epoch: 100
+seed: 128
+lr: 1e-7
+num_epoch: 300
+num_kfolds: 5
+
 balanced_train_num: 2000
 balanced_test_num: 1000
 
-batch_size: 32
+batch_size: 100
 num_train_step: 100
 save_itvl: 5 #50
 test_itvl: 5
 
-gpu: 3
+gpu: 1
 
 wandb:
   project: nsrr
-  group: sleep-stage-test
+  group: debug2-f30-lr1e-7
   name: trial
   cwd: current_work_directory

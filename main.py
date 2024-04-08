@@ -14,7 +14,7 @@ def main(args):
     pop_channels = []
     h5_files = glob.glob(os.path.expanduser(args.creation_dataset_path) + '*.h5')
 
-    loop_count = 1
+    loop_count = 0
     while True:
         # mkdir loop_${i}; mv loop_${i}
         directory = f"loop_{loop_count}"
@@ -30,13 +30,12 @@ def main(args):
                          ).model_instance
 
         routine = ModelTrainingRoutine(model, fs_channels, channels, annotation_labels, args)
-        routine.wandb_init(args)
 
         s_min_idx, s_max_idx = routine.run(dataset,
+                                           args,
                                            args.num_epoch,
                                            args.batch_size,
-                                           args.train_size
-                                           )
+                                           loop_count)
         pop_channels.append(channels[s_min_idx])
 
         if loop_count >= len(fs_channels) - 1:

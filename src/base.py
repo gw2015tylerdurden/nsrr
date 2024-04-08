@@ -28,6 +28,11 @@ class TrainingRoutineBase(ABC):
         else:
             print("[ERR] set optimizer")
             exit(1)
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer,
+                                                                    factor=0.1,
+                                                                    patience=10,
+                                                                    threshold=0.01,
+                                                                    verbose=True)
 
         self.device = torch.device(device)
         torch.cuda.set_device(gpu_id)
@@ -36,5 +41,5 @@ class TrainingRoutineBase(ABC):
     def run(self):
         pass
 
-    def wandb_init(self, args):
-        self.wandb = WandbLogging(args)
+    def wandb_init(self, args, string=None):
+        self.wandb = WandbLogging(args, string)

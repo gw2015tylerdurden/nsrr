@@ -58,16 +58,17 @@ class MaxPool1dDifferentSamplingFreq(nn.Module):
 
 class ModelCNN():
     def __init__(self, num_classes, fs_channels, model='default'):
-        if model == 'default':
-            self.model_instance = SimpleCNN(num_classes, fs_channels)
-        else:
+        if model != 'default':
             self.model_instance = ResNet54(num_classes, fs_channels)
+        else:
+            self.model_instance = SimpleCNN(num_classes, fs_channels)
+
 
 class SimpleCNN(ModelBase):
-    def __init__(self, num_classes, fs_channels, feature_size=50):
+    def __init__(self, num_classes, fs_channels, feature_size=10):
         super().__init__()
         one_channel = 1
-        conv_feat_num = 128
+        conv_feat_num = 512
         fc_size = int(conv_feat_num * len(fs_channels) * feature_size)
         self.features = nn.ModuleList()
 
@@ -75,27 +76,37 @@ class SimpleCNN(ModelBase):
             self.features.append(nn.Sequential(
                 nn.Conv1d(one_channel, 16, kernel_size=3, stride=1, padding=1),
                 nn.BatchNorm1d(16),
+                nn.ReLU(),
                 nn.MaxPool1d(kernel_size=2, stride=2),
-                nn.GELU(),
 
                 nn.Conv1d(16, 32, kernel_size=3, stride=1, padding=1),
                 nn.BatchNorm1d(32),
+                nn.ReLU(),
                 nn.MaxPool1d(kernel_size=2, stride=2),
-                nn.GELU(),
 
                 nn.Conv1d(32, 64, kernel_size=3, stride=1, padding=1),
                 nn.BatchNorm1d(64),
-                nn.MaxPool1d(kernel_size=2, stride=2),
-                nn.GELU(),
+                nn.ReLU(),
 
-                nn.Conv1d(64, conv_feat_num, kernel_size=3, stride=1, padding=1),
+                nn.Conv1d(64, 128, kernel_size=3, stride=1, padding=1),
+                nn.BatchNorm1d(128),
+                nn.ReLU(),
+                nn.MaxPool1d(kernel_size=2, stride=2),
+
+                nn.Conv1d(128, 256, kernel_size=3, stride=1, padding=1),
+                nn.BatchNorm1d(256),
+                nn.ReLU(),
+
+                nn.Conv1d(256, conv_feat_num, kernel_size=3, stride=1, padding=1),
                 nn.BatchNorm1d(conv_feat_num),
-                nn.AdaptiveAvgPool1d(feature_size)
+                nn.ReLU(),
+                nn.AdaptiveAvgPool1d(feature_size),
             ))
 
         self.classifier = nn.Sequential(
             nn.Linear(fc_size, fc_size//100),
-            nn.GELU(),
+            nn.ReLU(),
+            nn.BatchNorm1d(fc_size//100),
             nn.Dropout(0.5),
             nn.Linear(fc_size//100, 256),
             nn.Linear(256, num_classes)
@@ -197,7 +208,7 @@ class ResNet(nn.Module):
         self.layer1 = self._make_layer(block, 64, layers[0])
         self.layer2 = self._make_layer(block, 128, layers[1]) #, stride=2)
         self.layer3 = self._make_layer(block, 256, layers[2]) #, stride=2)
-        #self.layer4 = self._make_layer(block, 512, layers[3]) #, stride=2)
+        self.layer4 = self._make_layer(block, 512, layers[3]) #, stride=2)
 
         for m in self.modules():
             if isinstance(m, nn.Conv1d):
@@ -233,7 +244,7 @@ class ResNet(nn.Module):
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
-        #x = self.layer4(x)
+        x = self.layer4(x)
 
         return x
 
@@ -242,14 +253,14 @@ class ResNet54(ModelBase):
     def __init__(self, num_classes, fs_channels, feature_size=50):
         super().__init__()
         one_channel = 1
-        conv_feat_num = 256
+        conv_feat_num = 512
         fc_size = int(conv_feat_num * len(fs_channels) * feature_size)
         self.features = nn.ModuleList()
 
         for fs in fs_channels:
             self.features.append(nn.Sequential(
-                #ResNet(BasicBlock, [3, 4, 6, 3]),
-                ResNet(Bottleneck, [3, 4, 6, 3]),
+                ResNet(BasicBlock, [3, 4, 6, 3]),
+                #ResNet(Bottleneck, [3, 4, 6, 3]),
                 nn.AdaptiveAvgPool1d(feature_size)
             ))
 

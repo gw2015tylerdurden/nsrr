@@ -7,6 +7,7 @@ import h5py
 import ast
 from collections import defaultdict
 import numpy as np
+import random
 
 class ShhsDataset(Dataset):
     def __init__(self, h5_files, pop_channels=None, noise_channels_fs=None, duration=30.0):
@@ -101,6 +102,39 @@ class ShhsDataset(Dataset):
     def __collect_balanced_data(self, balance_data_num, used_patients=set()):
         balanced_data_map = defaultdict(list)
         label_event_count = defaultdict(int, {label: 0 for label in range(len(self.annotation_labels))})
+        dataset_indices = []
+
+        for file, patient in self.dataset_patient_keys:
+            if patient in used_patients:
+                # for test
+                continue
+
+            patient_events = {label: [] for label in range(len(self.annotation_labels))}
+            for event in file[patient].keys():
+                label = file[patient][event]['label'][()]
+                patient_events[label].append(event)
+
+            min_events = min(len(events) for events in patient_events.values())
+
+            if min_events > 0:
+                for label, events in patient_events.items():
+                    selected_events = random.sample(events, min_events)
+                    for event in selected_events:
+                        balanced_data_map[(file, patient)].append(event)
+                        dataset_indices.append(label)
+                        label_event_count[label] += 1
+
+            used_patients.add(patient)
+
+            if all(count >= balance_data_num for count in label_event_count.values()):
+                break
+
+        return balanced_data_map, dataset_indices, used_patients
+
+
+    def __collect_balanced_data_immediately(self, balance_data_num, used_patients=set()):
+        balanced_data_map = defaultdict(list)
+        label_event_count = defaultdict(int, {label: 0 for label in range(len(self.annotation_labels))})
 
         for file, patient in self.dataset_patient_keys:
             if patient in used_patients:
@@ -120,27 +154,38 @@ class ShhsDataset(Dataset):
 
     def balance_dataset(self, train_data_num=2000, test_data_num=1000):
         train_dataset = copy.copy(self)
+        #validation_dataset = copy.copy(self)
         test_dataset = copy.copy(self)
         train_keys = []
+        #validation_keys = []
         test_keys = []
 
         np.random.shuffle(self.dataset_patient_keys)
-        train_balanced_data_map, used_patients = self.__collect_balanced_data(train_data_num, set())
+        train_balanced_data_map, train_dataset_indices, used_patients = self.__collect_balanced_data(train_data_num, set())
         for (file, patient), events in train_balanced_data_map.items():
             for event in events:
                 train_keys.append((file, patient, event))
-        np.random.shuffle(train_keys)
 
-        test_balanced_data_map, _ = self.__collect_balanced_data(test_data_num, used_patients)
+        '''
+        validation_balanced_data_map, used_patients_validation = self.__collect_balanced_data(validation_data_num, used_patients_train)
+        for (file, patient), events in validation_balanced_data_map.items():
+            for event in events:
+                validation_keys.append((file, patient, event))
+        np.random.shuffle(validation_keys)
+        used_patients = used_patients_train.union(used_patients_validation)
+        '''
+
+        test_balanced_data_map, _, _ = self.__collect_balanced_data(test_data_num, used_patients)
         for (file, patient), events in test_balanced_data_map.items():
             for event in events:
                 test_keys.append((file, patient, event))
-        np.random.shuffle(test_keys)
 
         train_dataset.dataset_patient_keys = train_keys
+        #validation_dataset.dataset_patient_keys = validation_keys
         test_dataset.dataset_patient_keys = test_keys
 
-        return train_dataset, test_dataset
+        #return train_dataset, validation_dataset, test_dataset
+        return train_dataset, train_dataset_indices, test_dataset
 
 
     def split(self, size=0.7, random_state=None):

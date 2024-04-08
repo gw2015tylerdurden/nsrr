@@ -5,6 +5,9 @@ from tqdm import tqdm
 from .base import TrainingRoutineBase
 from .plots import plot_confusion_matrix
 from .camcaluculator import CamCalculator
+from sklearn.model_selection import StratifiedKFold
+from torch.utils.data import Subset
+from sklearn.metrics import accuracy_score
 
 
 class ModelTrainingRoutine(TrainingRoutineBase):
@@ -20,100 +23,173 @@ class ModelTrainingRoutine(TrainingRoutineBase):
         self.channel_labels = channels
         self.fs_channels = fs_channels
         self.annotation_labels = annotation_labels
+        self.num_kfolds = args.num_kfolds
+        self.kfold = StratifiedKFold(n_splits=args.num_kfolds, shuffle=True, random_state=args.seed)
 
 
-    def run(self, dataset, num_epoch, batch_size, train_size=0.7):
-        train_dataset, test_dataset = dataset.balance_dataset(self.balanced_train_num, self.balanced_test_num)
-        train_loader = torch.utils.data.DataLoader(
-            train_dataset,
-            batch_size=batch_size,
-            shuffle=True,
-            num_workers=0 if self.is_debug else os.cpu_count(), # main cpu threads_num
-            pin_memory=False if self.is_debug else True,
-            drop_last=True,
-        )
+    def run(self, dataset, args, num_epoch, batch_size, loop):
+        train_dataset, train_dataset_indices, test_dataset = dataset.balance_dataset(self.balanced_train_num, self.balanced_test_num)
+        test_loader = torch.utils.data.DataLoader(
+                test_dataset,
+                batch_size=batch_size,
+                shuffle=False,
+                num_workers=0 if self.is_debug else os.cpu_count(),
+                pin_memory=False if self.is_debug else True,
+                drop_last=False,
+            )
 
-        validation_loader = torch.utils.data.DataLoader(
-            test_dataset,
-            batch_size=batch_size,
-            shuffle=False,
-            num_workers=0 if self.is_debug else os.cpu_count(),
-            pin_memory=False if self.is_debug else True,
-            drop_last=False,
-        )
+        def weight_reset(m):
+            if isinstance(m, torch.nn.Conv2d) or isinstance(m, torch.nn.Linear):
+                m.reset_parameters()
 
-        self.model = self.model.to(self.device)
-        best_validation_score = 0.0
-        best_model_file = None
-        best_epoch = 0
+        best_valid_fold_models = [None] * self.num_kfolds
+        for fold, (train_idx, valid_idx) in enumerate(self.kfold.split(list(range(len(train_dataset_indices))), train_dataset_indices)):
+            print(f'[LOG] Fold {fold+1}/{self.num_kfolds}')
+            self.wandb_init(args, string=f"loop{loop+1}_fold{fold+1}")
+            self.model.apply(weight_reset)
 
-        for epoch in range(num_epoch):
-            self.plot_epoch = epoch + 1
+            train_subs = Subset(train_dataset, train_idx)
+            valid_subs = Subset(train_dataset, valid_idx)
 
-            self.model.train()
-            total_loss_mean = 0.0
-            total_num = 0
-            pbar = tqdm(train_loader, desc=f"Epoch {self.plot_epoch}/{num_epoch}", dynamic_ncols=True)
-            for inputs, labels in pbar:
-                inputs, labels = inputs.to(self.device), labels.to(self.device)
+            train_loader = torch.utils.data.DataLoader(
+                train_subs,
+                batch_size=batch_size,
+                shuffle=True,
+                num_workers=0 if self.is_debug else os.cpu_count(), # main cpu threads_num
+                pin_memory=False if self.is_debug else True,
+                drop_last=True,
+            )
 
-                self.optimizer.zero_grad()
-                outputs = self.model(inputs)
-                loss = self.criterion(outputs, labels)
+            valid_loader = torch.utils.data.DataLoader(
+                valid_subs,
+                batch_size=batch_size,
+                shuffle=True,
+                num_workers=0 if self.is_debug else os.cpu_count(), # main cpu threads_num
+                pin_memory=False if self.is_debug else True,
+                drop_last=False,
+            )
 
-                loss.backward()
-                self.optimizer.step()
-                total_loss_mean += loss.item() * inputs.size(0)
-                total_num += inputs.size(0)
+            self.model = self.model.to(self.device)
+            best_valid_score = 0.0
+            best_model_file = None
+            best_epoch = 0
 
-                pbar.set_postfix({'loss': f"{loss.item():.4f}"})
+            for epoch in range(num_epoch):
+                self.plot_epoch = epoch + 1
 
-            if self.wandb is not None:
-                self.wandb.update(train_loss=total_loss_mean / total_num)
-            print(f"[LOG] Epoch {self.plot_epoch}/{num_epoch} - Loss: {total_loss_mean / total_num:.4f}")
+                self.model.train()
+                total_loss_mean = 0.0
+                total_num = 0
+                pbar = tqdm(train_loader, desc=f"Epoch {self.plot_epoch}/{num_epoch}", dynamic_ncols=True)
+                for inputs, labels in pbar:
+                    inputs, labels = inputs.to(self.device), labels.to(self.device)
 
+                    self.optimizer.zero_grad()
+                    outputs = self.model(inputs)
+                    loss = self.criterion(outputs, labels)
 
-            if epoch % self.save_itvl == 0:
-                model_file = f"model_e{self.plot_epoch}.pth"
-                #torch.save(self.model.state_dict(), os.path.join(self.model_dir, model_file))
-                torch.save(self.model.state_dict(),  model_file)
-                print(f"[LOG] Model parameters are saved to {model_file}.")
+                    loss.backward()
+                    self.optimizer.step()
+                    total_loss_mean += loss.item() * inputs.size(0)
+                    pbar.set_postfix({'loss': f"{loss.item():.4f}"})
 
+                # for comfirm overfitting
                 self.model.eval()
-                correct = 0
-                all_predictions = []
-                all_true_labels = []
+                true_labels = []
+                pred_labels = []
                 with torch.no_grad():
                     total_loss_mean = 0.0
-                    for inputs, labels in validation_loader:
+                    total_num = 0
+                    for inputs, labels in train_loader:
                         inputs, labels = inputs.to(self.device), labels.to(self.device)
                         outputs = self.model(inputs).detach()
                         loss = self.criterion(outputs, labels)
                         total_loss_mean += loss.item() * inputs.size(0)
+                        total_num += inputs.size(0)
                         _, predicted = outputs.max(1)
-                        all_predictions.extend(predicted.cpu().numpy())
-                        all_true_labels.extend(labels.cpu().numpy())
-                        correct += predicted.eq(labels).sum().item()
+                        true_labels.extend(labels.cpu().numpy())
+                        pred_labels.extend(predicted.cpu().numpy())
 
-                accuracy = 100. * correct / len(validation_loader.dataset)
+                train_acc = accuracy_score(true_labels, pred_labels) * 100
+                train_loss = total_loss_mean / total_num
+
+                # validation
+                self.model.eval()
+                true_labels = []
+                pred_labels = []
+                with torch.no_grad():
+                    total_loss_mean = 0.0
+                    total_num = 0
+                    for inputs, labels in valid_loader:
+                        inputs, labels = inputs.to(self.device), labels.to(self.device)
+                        outputs = self.model(inputs).detach()
+                        loss = self.criterion(outputs, labels)
+                        total_loss_mean += loss.item() * inputs.size(0)
+                        total_num += inputs.size(0)
+                        _, predicted = outputs.max(1)
+                        true_labels.extend(labels.cpu().numpy())
+                        pred_labels.extend(predicted.cpu().numpy())
+
+                valid_acc = accuracy_score(true_labels, pred_labels) * 100
+                valid_loss = total_loss_mean / total_num
+                self.scheduler.step(valid_loss)
+
+                print(f"[LOG] Vlidation Loss after Epoch Epoch {self.plot_epoch}/{num_epoch} - Loss: {valid_loss:.4f}")
+                print(f"[LOG] Validation Accuracy after Epoch {self.plot_epoch}: {valid_acc:.2f}%\n")
+
                 if self.wandb is not None:
-                    self.wandb.update(test_loss=total_loss_mean / len(validation_loader.dataset), acuuracy=accuracy)
+                    self.wandb.update(train_loss=train_loss,
+                                      valid_loss=valid_loss,
+                                      train_acc=train_acc,
+                                      valid_acc=valid_acc,
+                                      )
 
-                if accuracy > best_validation_score:
-                    best_validation_score = accuracy
-                    best_model_file = model_file
-                    best_epoch = self.plot_epoch
-                    # Compute and plot confusion matrix
-                    plot_confusion_matrix(np.array(all_true_labels), np.array(all_predictions), classes=self.annotation_labels, accuracy=accuracy, epoch=best_epoch)
+                if best_valid_score < valid_acc:
+                    # remove an old best file
+                    os.remove(best_model_file) if best_model_file is not None else None
+                    best_valid_score = valid_acc
+                    best_model_file = f"model_e{self.plot_epoch}_fold{fold}.pth"
+                    best_valid_fold_models[fold] = best_model_file
+                    torch.save(self.model.state_dict(),  best_model_file)
+                    print(f"[LOG] Model parameters are saved to {best_model_file}.")
 
-                print(f"[LOG] Test Loss after Epoch Epoch {self.plot_epoch}/{num_epoch} - Loss: {total_loss_mean / len(validation_loader.dataset):.4f}")
-                print(f"[LOG] Test Accuracy after Epoch {self.plot_epoch}: {accuracy:.2f}%\n")
+            self.wandb.finish()
 
-        if self.wandb is not None:
-            self.wandb.update(best_iteration_accuracy=best_validation_score)
+        # test
+        self.model.eval()
+        correct = 0
+        all_predictions = []
+        all_true_labels = []
+        with torch.no_grad():
+            total_loss_mean = 0.0
+            for inputs, labels in test_loader:
+                inputs, labels = inputs.to(self.device), labels.to(self.device)
+                outputs = self.model(inputs).detach()
+                loss = self.criterion(outputs, labels)
+                total_loss_mean += loss.item() * inputs.size(0)
+                _, predicted = outputs.max(1)
+                all_predictions.extend(predicted.cpu().numpy())
+                all_true_labels.extend(labels.cpu().numpy())
+                correct += predicted.eq(labels).sum().item()
 
+        accuracy = 100. * correct / len(test_loader.dataset)
+        test_loss = total_loss_mean / len(test_loader.dataset)
+
+        if valid_acc > best_valid_score:
+            best_model_file = f"model_e{self.plot_epoch}.pth"
+            #torch.save(self.model.state_dict(), os.path.join(self.model_dir, model_file))
+            torch.save(self.model.state_dict(),  best_model_file)
+            print(f"[LOG] Model parameters are saved to {best_model_file}.")
+            best_epoch = self.plot_epoch
+            # Compute and plot confusion matrix
+            plot_confusion_matrix(np.array(all_true_labels), np.array(all_predictions), classes=self.annotation_labels, accuracy=accuracy, epoch=best_epoch)
+
+        print(f"[LOG] Test Loss after Epoch Epoch {self.plot_epoch}/{num_epoch} - Loss: {test_loss:.4f}")
+        print(f"[LOG] Test Accuracy after Epoch {self.plot_epoch}: {accuracy:.2f}%\n")
+
+        # test
         cam_calc = CamCalculator(best_model_file, self.device, self.annotation_labels, self.fs_channels, self.channel_labels, best_epoch)
-        cam_calc.plot_cam(validation_loader)
-        s_min_idx, s_max_idx = cam_calc.calc_sim_result(validation_loader, all_predictions)
+        cam_calc.plot_cam(test_loader)
+        s_min_idx, s_max_idx = cam_calc.calc_sim_result(test_loader, all_predictions)
 
         return s_min_idx, s_max_idx

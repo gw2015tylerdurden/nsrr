@@ -36,7 +36,7 @@ class CamCalculator():
             inputs, labels = inputs.to(self.device), labels.to(self.device)
 
             targets = [ClassifierOutputTarget(i.item()) for i in all_predictions]
-            reload_model = ModelCNN(len(self.annotation_labels), self.fs_channels)
+            reload_model = ModelCNN(len(self.annotation_labels), self.fs_channels).model_instance
 
             for channel_idx, feature in enumerate(reload_model.features):
                 reload_model.load_state_dict(torch.load(self.model_file))
@@ -66,7 +66,7 @@ class CamCalculator():
             # set cam targets as the correct label
             targets = [ClassifierOutputTarget(i.item()) for i in labels]
 
-            reload_model = ModelCNN(len(self.annotation_labels), self.fs_channels)
+            reload_model = ModelCNN(len(self.annotation_labels), self.fs_channels).model_instance
 
             cams = []
             for feature in reload_model.features:
