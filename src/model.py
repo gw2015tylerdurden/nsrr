@@ -74,41 +74,45 @@ class SimpleCNN(ModelBase):
 
         for fs in fs_channels:
             self.features.append(nn.Sequential(
-                nn.Conv1d(one_channel, 16, kernel_size=3, stride=1, padding=1),
+                nn.Conv1d(one_channel, 16, kernel_size=5, stride=1, padding=2),
                 nn.BatchNorm1d(16),
-                nn.ReLU(),
+                nn.PReLU(),
                 nn.MaxPool1d(kernel_size=2, stride=2),
 
-                nn.Conv1d(16, 32, kernel_size=3, stride=1, padding=1),
+                nn.Conv1d(16, 32, kernel_size=5, stride=1, padding=2),
                 nn.BatchNorm1d(32),
-                nn.ReLU(),
+                nn.PReLU(),
                 nn.MaxPool1d(kernel_size=2, stride=2),
 
-                nn.Conv1d(32, 64, kernel_size=3, stride=1, padding=1),
+                nn.Conv1d(32, 64, kernel_size=5, stride=1, padding=2),
                 nn.BatchNorm1d(64),
-                nn.ReLU(),
+                nn.PReLU(),
 
                 nn.Conv1d(64, 128, kernel_size=3, stride=1, padding=1),
                 nn.BatchNorm1d(128),
-                nn.ReLU(),
+                nn.PReLU(),
                 nn.MaxPool1d(kernel_size=2, stride=2),
 
                 nn.Conv1d(128, 256, kernel_size=3, stride=1, padding=1),
                 nn.BatchNorm1d(256),
-                nn.ReLU(),
+                nn.PReLU(),
 
                 nn.Conv1d(256, conv_feat_num, kernel_size=3, stride=1, padding=1),
                 nn.BatchNorm1d(conv_feat_num),
-                nn.ReLU(),
+                nn.PReLU(),
                 nn.AdaptiveAvgPool1d(feature_size),
             ))
 
         self.classifier = nn.Sequential(
+            nn.Dropout(0.5),
             nn.Linear(fc_size, fc_size//100),
-            nn.ReLU(),
+            nn.PReLU(),
             nn.BatchNorm1d(fc_size//100),
             nn.Dropout(0.5),
             nn.Linear(fc_size//100, 256),
+            nn.PReLU(),
+            nn.BatchNorm1d(256),
+            nn.Dropout(0.4),
             nn.Linear(256, num_classes)
         )
 
@@ -124,6 +128,61 @@ class SimpleCNN(ModelBase):
         #flatten = [remove_padding_data(x[:, i, :, :]).view(batch, -1) for i in range(channel)]
         x = self.classifier(x)
         return x
+
+# class SimpleCNN(ModelBase):
+#     def __init__(self, num_classes, fs_channels, feature_size=10):
+#         super().__init__()
+#         one_channel = 1
+#         conv_feat_num = 256
+#         fc_size = int(conv_feat_num * len(fs_channels) * feature_size)
+#         self.features = nn.ModuleList()
+#         self.lstms = nn.ModuleList()
+
+#         for fs in fs_channels:
+#             self.features.append(nn.Sequential(
+#                 nn.Conv1d(one_channel, 64, kernel_size=5, stride=1, padding=1),
+#                 nn.BatchNorm1d(64),
+#                 nn.ReLU(),
+#                 nn.MaxPool1d(kernel_size=2, stride=2),
+
+#                 nn.Conv1d(64, 128, kernel_size=5, stride=1, padding=1),
+#                 nn.BatchNorm1d(128),
+#                 nn.ReLU(),
+#                 nn.MaxPool1d(kernel_size=2, stride=2),
+
+#                 nn.Conv1d(128, conv_feat_num, kernel_size=5, stride=1, padding=1),
+#                 nn.BatchNorm1d(conv_feat_num),
+#                 nn.ReLU(),
+#                 nn.AdaptiveAvgPool1d(feature_size),
+#             ))
+
+#             self.lstms.append(
+#                 nn.LSTM(feature_size, hidden_size=feature_size * 2, num_layers=conv_feat_num // 2, dropout=0.5, batch_first=True)
+#                 )
+
+#         self.classifier = nn.Sequential(
+#             nn.Dropout(0.5),
+#             nn.Linear(66560, 1024),
+#             nn.ReLU(),
+#             nn.BatchNorm1d(1024),
+#             nn.Dropout(0.4),
+#             nn.Linear(1024, num_classes)
+#         )
+
+#     def forward(self, x):
+#         features = []
+#         for i, layers in enumerate(self.features):
+#             channel_data = x[:, i, :, :]
+#             signal = remove_padding_batch_data(channel_data)
+#             out, _ = self.lstms[i](layers(signal))
+#             features.append(out)
+
+#         # flatten
+#         x = torch.cat([f.reshape(f.size(0), -1) for f in features], dim=1)
+#         #flatten = [remove_padding_data(x[:, i, :, :]).view(batch, -1) for i in range(channel)]
+#         x = self.classifier(x)
+#         return x
+
 
 
 class BasicBlock(nn.Module):

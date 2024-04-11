@@ -1,7 +1,6 @@
 import hydra
 from src.seeds import DeterministicSeed
 from src.shhsdataset import ShhsDataset
-from src.model import ModelCNN
 from src.trainroutine import ModelTrainingRoutine
 import os
 import glob
@@ -25,11 +24,7 @@ def main(args):
         dataset = ShhsDataset(h5_files, pop_channels, args.add_noise_channel_fs)
         fs_channels, channels, _, annotation_labels = dataset.get_dataset_info()
 
-        model = ModelCNN(num_classes=len(annotation_labels),
-                         fs_channels=fs_channels
-                         ).model_instance
-
-        routine = ModelTrainingRoutine(model, fs_channels, channels, annotation_labels, args)
+        routine = ModelTrainingRoutine(fs_channels, channels, annotation_labels, args)
 
         s_min_idx, s_max_idx = routine.run(dataset,
                                            args,

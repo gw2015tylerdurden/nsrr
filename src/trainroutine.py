@@ -5,20 +5,22 @@ from tqdm import tqdm
 from .base import TrainingRoutineBase
 from .plots import plot_confusion_matrix
 from .camcaluculator import CamCalculator
+from .model import ModelCNN
 from sklearn.model_selection import StratifiedKFold
 from torch.utils.data import Subset
 from sklearn.metrics import accuracy_score
 
 
 class ModelTrainingRoutine(TrainingRoutineBase):
-    def __init__(self, model, fs_channels, channels, annotation_labels, args, criterion='cross_entropy', optimizer='Adam'):
-        super().__init__(model, criterion, optimizer, lr=args.lr, gpu_id=args.gpu)
+    def __init__(self, fs_channels, channels, annotation_labels, args, criterion='cross_entropy', optimizer='Adam'):
+        super().__init__(criterion, gpu_id=args.gpu)
         self.save_itvl = args.save_itvl
         self.test_itvl = args.test_itvl
         self.model_dir = args.model_dir
         self.is_debug = args.is_debug
         self.balanced_train_num = args.balanced_train_num
         self.balanced_test_num = args.balanced_test_num
+        self.lr = args.lr
 
         self.channel_labels = channels
         self.fs_channels = fs_channels
@@ -38,15 +40,15 @@ class ModelTrainingRoutine(TrainingRoutineBase):
                 drop_last=False,
             )
 
-        def weight_reset(m):
-            if isinstance(m, torch.nn.Conv2d) or isinstance(m, torch.nn.Linear):
-                m.reset_parameters()
-
         best_valid_fold_models = [None] * self.num_kfolds
         for fold, (train_idx, valid_idx) in enumerate(self.kfold.split(list(range(len(train_dataset_indices))), train_dataset_indices)):
             print(f'[LOG] Fold {fold+1}/{self.num_kfolds}')
             self.wandb_init(args, string=f"loop{loop+1}_fold{fold+1}")
-            self.model.apply(weight_reset)
+
+            self.set_model(ModelCNN(num_classes=len(self.annotation_labels),
+                                    fs_channels=self.fs_channels).model_instance,
+                           optimizer='Adam',
+                           lr=self.lr)
 
             train_subs = Subset(train_dataset, train_idx)
             valid_subs = Subset(train_dataset, valid_idx)
@@ -177,7 +179,7 @@ class ModelTrainingRoutine(TrainingRoutineBase):
 
         if valid_acc > best_valid_score:
             best_model_file = f"model_e{self.plot_epoch}.pth"
-            #torch.save(self.model.state_dict(), os.path.join(self.model_dir, model_file))
+            #torch.save(model.state_dict(), os.path.join(model_dir, model_file))
             torch.save(self.model.state_dict(),  best_model_file)
             print(f"[LOG] Model parameters are saved to {best_model_file}.")
             best_epoch = self.plot_epoch

@@ -13,8 +13,8 @@ class ModelBase(ABC, torch.nn.Module):
 
 
 class TrainingRoutineBase(ABC):
-    def __init__(self, model, criterion, optimizer, lr=1e-3, device='cuda', gpu_id=0):
-        self.model = model
+    def __init__(self, criterion, device='cuda', gpu_id=0):
+        self.model = None
         self.wandb = None
 
         if criterion == 'cross_entropy':
@@ -22,6 +22,19 @@ class TrainingRoutineBase(ABC):
         else:
             print("[ERR] set criterion")
             exit(1)
+
+        self.device = torch.device(device)
+        torch.cuda.set_device(gpu_id)
+
+    @abstractmethod
+    def run(self):
+        pass
+
+    def wandb_init(self, args, string=None):
+        self.wandb = WandbLogging(args, string)
+
+    def set_model(self, model, optimizer, lr=1e-3):
+        self.model = model
 
         if optimizer == 'Adam':
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr)
@@ -33,13 +46,3 @@ class TrainingRoutineBase(ABC):
                                                                     patience=10,
                                                                     threshold=0.01,
                                                                     verbose=True)
-
-        self.device = torch.device(device)
-        torch.cuda.set_device(gpu_id)
-
-    @abstractmethod
-    def run(self):
-        pass
-
-    def wandb_init(self, args, string=None):
-        self.wandb = WandbLogging(args, string)
