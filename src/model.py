@@ -104,15 +104,15 @@ class SimpleCNN(ModelBase):
             ))
 
         self.classifier = nn.Sequential(
-            nn.Dropout(0.5),
+            nn.Dropout(0.7),
             nn.Linear(fc_size, fc_size//100),
             nn.PReLU(),
             nn.BatchNorm1d(fc_size//100),
-            nn.Dropout(0.5),
+            nn.Dropout(0.6),
             nn.Linear(fc_size//100, 256),
             nn.PReLU(),
             nn.BatchNorm1d(256),
-            nn.Dropout(0.4),
+            nn.Dropout(0.5),
             nn.Linear(256, num_classes)
         )
 

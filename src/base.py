@@ -33,7 +33,7 @@ class TrainingRoutineBase(ABC):
     def wandb_init(self, args, string=None):
         self.wandb = WandbLogging(args, string)
 
-    def set_model(self, model, optimizer, lr=1e-3):
+    def set_model(self, model, optimizer, lr=1e-3, scheduler='default'):
         self.model = model
 
         if optimizer == 'Adam':
@@ -41,8 +41,13 @@ class TrainingRoutineBase(ABC):
         else:
             print("[ERR] set optimizer")
             exit(1)
-        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer,
-                                                                    factor=0.1,
-                                                                    patience=10,
-                                                                    threshold=0.01,
-                                                                    verbose=True)
+        if scheduler == 'default':
+            self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer,
+                                                                        factor=0.3,
+                                                                        patience=2,
+                                                                        verbose=True)
+        else:
+            self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer,
+                                                                    gamma=0.9,
+                                                                    last_epoch=-1)
+
