@@ -15,9 +15,9 @@ def plot_confusion_matrix(y_true, y_pred, classes, accuracy, epoch, title=None, 
 
     # Compute confusion matrix
     cm = confusion_matrix(y_true, y_pred)
-    cm_normalized = normalize(cm, axis=1, norm='l1')
+    cm_normalized = normalize(cm, axis=0, norm='l1')
 
-    annot = np.vectorize(lambda x: f'{int(x)}' if x != 0 else '')(cm)
+    annot = np.vectorize(lambda x: f'{x:.1%}' if x != 0 else '')(cm_normalized)
 
     fig, ax = plt.subplots()
     seaborn.heatmap(
@@ -29,8 +29,15 @@ def plot_confusion_matrix(y_true, y_pred, classes, accuracy, epoch, title=None, 
         xticklabels=classes,
         annot=annot,
         fmt='',
-        cbar=True
+        cbar=True,
+        cbar_kws={'pad': 0.15}
     )
+
+    # Adding counts of true labels on a new axis
+    ax2 = ax.twinx()
+    ax2.set_ylim(ax.get_ylim())
+    ax2.set_yticks([i + 0.5 for i in range(len(classes))])
+    ax2.set_yticklabels(np.sum(cm, axis=1))
 
     ax.set(title=title,
            ylabel='True label',
@@ -46,7 +53,7 @@ def plot_confusion_matrix(y_true, y_pred, classes, accuracy, epoch, title=None, 
     plt.close()
 
 
-def plot_cam_1d(inputs, labels, cams, annotation, channel_labels, fs_channels, epoch):
+def plot_cam_1d(inputs, labels, cams, annotation, channel_labels, fs_channels, fname=''):
     each_labels, indices = np.unique(labels.detach().cpu().numpy(), return_index=True)
     channel_num = len(channel_labels)
 
@@ -82,13 +89,13 @@ def plot_cam_1d(inputs, labels, cams, annotation, channel_labels, fs_channels, e
         fig.colorbar(scatter, ax=axs.ravel().tolist(), orientation='vertical', pad=0.01, aspect=20, cmap='jet')
         axs[0].legend(loc='upper right')
         plt.suptitle(f'Label: {annotation[labels[label_idx].item()]}')
-        filename = f"cam_epoch{epoch}_{annotation[labels[label_idx]]}.svg"
+        filename = f"cam_{annotation[labels[label_idx]]}_{fname}.svg"
         plt.savefig(filename, bbox_inches='tight')
         plt.close()
     print(f"[LOG] class activation map is saved")
 
 
-def plot_sim(sim, channel_labels, annotation, label_counts, epoch):
+def plot_sim(sim, channel_labels, annotation, label_counts):
     sim_with_siv = np.hstack((sim, np.mean(sim, axis=1, keepdims=True)))
     annotation = annotation + ['SIV']
     min_vals = np.min(sim_with_siv, axis=0)
@@ -114,7 +121,7 @@ def plot_sim(sim, channel_labels, annotation, label_counts, epoch):
     plt.title(f'Signal Importance Matrix', pad=20)
     plt.tight_layout()
     # Save figure as SVG with epoch number
-    filename = f"signals_importance_matrix_epoch{epoch}.svg"
+    filename = f"signals_importance_matrix.svg"
     plt.savefig(filename)
     print(f"[LOG] Signal Importance Matrix saved to {filename}")
     plt.close()

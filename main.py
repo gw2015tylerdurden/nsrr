@@ -33,14 +33,17 @@ def main(args):
                                            loop_count)
         pop_channels.append(channels[s_min_idx])
 
-        if loop_count >= len(fs_channels) - 1:
+        if len(fs_channels) == 1:
+            # Can't pop any more signals
             break
         else:
             loop_count += 1
 
         # cd ..
         os.chdir("..")
-    print(f"[LOG] pop channels: {pop_channels}")
+
+    with open("pop_channels.txt", "w") as file:
+        file.write(pop_channels)
 
 if __name__ == '__main__':
     main()

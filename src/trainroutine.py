@@ -158,40 +158,38 @@ class ModelTrainingRoutine(TrainingRoutineBase):
             self.wandb.finish()
 
         # test
-        self.model.eval()
-        correct = 0
-        all_predictions = []
-        all_true_labels = []
-        with torch.no_grad():
-            total_loss_mean = 0.0
-            for inputs, labels in test_loader:
-                inputs, labels = inputs.to(self.device), labels.to(self.device)
-                outputs = self.model(inputs).detach()
-                loss = self.criterion(outputs, labels)
-                total_loss_mean += loss.item() * inputs.size(0)
-                _, predicted = outputs.max(1)
-                all_predictions.extend(predicted.cpu().numpy())
-                all_true_labels.extend(labels.cpu().numpy())
-                correct += predicted.eq(labels).sum().item()
+        all_fold_predictions = []
+        all_fold_true_labels = []
+        for fold in range(len(best_valid_fold_models)):
+            reload_model = ModelCNN(len(self.annotation_labels), self.fs_channels).model_instance
+            reload_model.load_state_dict(torch.load(best_valid_fold_models[fold]))
+            self.model.eval()
+            fold_predictions = []
+            fold_true_labels = []
 
-        accuracy = 100. * correct / len(test_loader.dataset)
-        test_loss = total_loss_mean / len(test_loader.dataset)
+            with torch.no_grad():
+                for inputs, labels in test_loader:
+                    inputs, labels = inputs.to(self.device), labels.to(self.device)
+                    outputs = self.model(inputs).detach()
+                    _, predicted = outputs.max(1)
+                    fold_predictions.extend(predicted.cpu().numpy())
+                    fold_true_labels.extend(labels.cpu().numpy())
 
-        if valid_acc > best_valid_score:
-            best_model_file = f"model_e{self.plot_epoch}.pth"
-            #torch.save(model.state_dict(), os.path.join(model_dir, model_file))
-            torch.save(self.model.state_dict(),  best_model_file)
-            print(f"[LOG] Model parameters are saved to {best_model_file}.")
-            best_epoch = self.plot_epoch
-            # Compute and plot confusion matrix
-            plot_confusion_matrix(np.array(all_true_labels), np.array(all_predictions), classes=self.annotation_labels, accuracy=accuracy, epoch=best_epoch)
+            all_fold_predictions.append(fold_predictions)
+            all_fold_true_labels.append(fold_true_labels)
 
-        print(f"[LOG] Test Loss after Epoch Epoch {self.plot_epoch}/{num_epoch} - Loss: {test_loss:.4f}")
-        print(f"[LOG] Test Accuracy after Epoch {self.plot_epoch}: {accuracy:.2f}%\n")
+        from scipy.stats import mode
+        # Calculate ensemble predictions via majority voting
+        ensemble_predictions, number_occurrences = mode(all_fold_predictions, axis=0)
+        ensemble_predictions = ensemble_predictions[0]
+        # Assuming all folds have the same true labels for each instance
+        true_labels = all_fold_true_labels[0]
 
-        # test
-        cam_calc = CamCalculator(best_model_file, self.device, self.annotation_labels, self.fs_channels, self.channel_labels, best_epoch)
+        accuracy = np.mean(ensemble_predictions == true_labels) * 100
+        plot_confusion_matrix(np.array(true_labels), ensemble_predictions, classes=self.annotation_labels, accuracy=accuracy, epoch=best_epoch)
+
+        cam_calc = CamCalculator(best_valid_fold_models, self.device, self.annotation_labels, self.fs_channels, self.channel_labels, ensemble_predictions)
         cam_calc.plot_cam(test_loader)
-        s_min_idx, s_max_idx = cam_calc.calc_sim_result(test_loader, all_predictions)
+        s_min_idx, s_max_idx = cam_calc.calc_sim_result(test_loader)
 
         return s_min_idx, s_max_idx

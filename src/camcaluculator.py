@@ -7,25 +7,25 @@ from .plots import plot_cam_1d, plot_sim
 
 
 class CamCalculator():
-    def __init__(self, model_file, device, annotation_labels, fs_channels, channel_labels, epoch):
-        self.model_file = model_file
+    def __init__(self, model_files, device, annotation_labels, fs_channels, channel_labels, all_predictions):
+        self.model_files = model_files
         self.device = device
         self.annotation_labels = annotation_labels
         self.fs_channels = fs_channels
         self.channel_labels = channel_labels
-        self.epoch = epoch
+        self.all_predictions = all_predictions
 
-    def calc_sim_result(self, data_loader, all_predictions):
-        sim, label_counts = self.calc_signals_importance_matrix(data_loader, all_predictions)
-        np.save(f'signal_importance_matrix_epoch{self.epoch}.npy', sim)
-        np.save(f'label_counts{self.epoch}.npy', label_counts)
-        plot_sim(sim, self.channel_labels, self.annotation_labels, label_counts, self.epoch)
+    def calc_sim_result(self, data_loader):
+        sim, label_counts = self.calc_signals_importance_matrix(data_loader)
+        np.save(f'signal_importance_matrix.npy', sim)
+        np.save(f'label_counts.npy', label_counts)
+        plot_sim(sim, self.channel_labels, self.annotation_labels, label_counts)
         # get signal importance vector (Eq. (3.14))
         sim_vector = sim.mean(axis=1)
         return np.argmin(sim_vector), np.argmax(sim_vector)
 
 
-    def calc_signals_importance_matrix(self, data_loader, all_predictions):
+    def __calc_sim(self, model_file, data_loader):
         num_labels = len(self.annotation_labels)
         num_channels = len(self.channel_labels)
 
@@ -35,11 +35,11 @@ class CamCalculator():
         for inputs, labels in data_loader:
             inputs, labels = inputs.to(self.device), labels.to(self.device)
 
-            targets = [ClassifierOutputTarget(i.item()) for i in all_predictions]
+            targets = [ClassifierOutputTarget(i.item()) for i in self.all_predictions]
             reload_model = ModelCNN(len(self.annotation_labels), self.fs_channels).model_instance
 
             for channel_idx, feature in enumerate(reload_model.features):
-                reload_model.load_state_dict(torch.load(self.model_file))
+                reload_model.load_state_dict(torch.load(model_file))
                 last_layer = [feature[-1]]
                 cam = GradCAM1D(model=reload_model, target_layers=last_layer)
                 _ = cam(input_tensor=inputs, targets=targets)
@@ -56,26 +56,45 @@ class CamCalculator():
 
                     # for plot result
                     label_counts[label_idx] += len(label_indices)
+        return signals_importance_matrix, label_counts
+
+
+    def calc_signals_importance_matrix(self, data_loader):
+
+        sims = []
+        for model_file in self.model_files:
+            sim, label_counts = self.__calc_sim(model_file, data_loader)
+            sims.append(sim)
+
+        # ensamble
+        signals_importance_matrix = np.mean(sims, axis=0)
 
         return signals_importance_matrix, label_counts
 
-    def plot_cam(self, data_loader, plot_once=True):
-        for inputs, labels in data_loader:
-            inputs, labels = inputs.to(self.device), labels.to(self.device)
+    def plot_cam(self, data_loader):
+        plot_once = True
+        all_model_cams = []
 
-            # set cam targets as the correct label
-            targets = [ClassifierOutputTarget(i.item()) for i in labels]
-
+        for model_file in self.model_files:
+            # set cam targets as the predicred label
+            targets = [ClassifierOutputTarget(i.item()) for i in self.all_predictions]
             reload_model = ModelCNN(len(self.annotation_labels), self.fs_channels).model_instance
 
-            cams = []
-            for feature in reload_model.features:
-                reload_model.load_state_dict(torch.load(self.model_file))
-                last_layer = [feature[-1]]
-                cam = GradCAM1D(model=reload_model, target_layers=last_layer)
-                result = cam(input_tensor=inputs, targets=targets)
-                cams.append(result)
+            for inputs, labels in data_loader:
+                inputs, labels = inputs.to(self.device), labels.to(self.device)
 
-            plot_cam_1d(inputs, labels, np.array(cams), self.annotation_labels, self.channel_labels, self.fs_channels, self.epoch)
-            if plot_once is True:
-                break
+                cams = []
+                for feature in reload_model.features:
+                    reload_model.load_state_dict(torch.load(model_file))
+                    last_layer = [feature[-1]]
+                    cam = GradCAM1D(model=reload_model, target_layers=last_layer)
+                    result = cam(input_tensor=inputs, targets=targets)
+                    cams.append(result)
+
+                plot_cam_1d(inputs, labels, np.array(cams), self.annotation_labels, self.channel_labels, self.fs_channels, fname=model_file)
+                if plot_once is True:
+                    break
+            all_model_cams.append(cams)
+
+        ensemble_cam = np.mean(np.array(all_model_cams), axis=0)
+        plot_cam_1d(inputs, labels, ensemble_cam, self.annotation_labels, self.channel_labels, self.fs_channels, fname="ensemble")
