@@ -124,6 +124,13 @@ class ShhsDataLoader:
         self.annotation_counts = {label: 0 for label in self.annotation_labels}
         self.debug_plotter = PreprocessResultPlotter(debug_plots_interval, channel_labels)
         os.makedirs(creation_dataset_path, exist_ok=True)
+        # for save variable length signals in h5
+        # pyedflib.readSignal returns float64, but original EDF has a 16 bit data format
+        if target_fs is None:
+            dtype_variable_float = np.dtype('float16')
+        else:
+            dtype_variable_float = h5py.special_dtype(vlen=np.dtype('float16'))
+
 
         for idx, (edf_file, xml_file) in enumerate(tqdm(zip(self.edf_files, self.xml_files), total=len(self.edf_files), desc="Processing files")):
             if idx % save_file_interval == 0:
@@ -144,13 +151,10 @@ class ShhsDataLoader:
 
             signal_list, label_list = self.__preprocessing(xml_file, fs_channels, signals, target_fs, total_count)
 
-            # for save variable length signals in h5
-            # pyedflib.readSignal returns float64, but original EDF has a 16 bit data format
-            dtype_variable_length_float = h5py.special_dtype(vlen=np.dtype('float16'))
             patient_no = f"{os.path.splitext(os.path.basename(edf_file))[0]}"
             for (signal, label) in zip(signal_list, label_list):
                 dataset_name = f"shhs{total_count}"
-                hf.create_dataset(f"{patient_no}/{dataset_name}/signal", data=signal, dtype=dtype_variable_length_float)
+                hf.create_dataset(f"{patient_no}/{dataset_name}/signal", data=signal, dtype=dtype_variable_float)
                 hf.create_dataset(f"{patient_no}/{dataset_name}/label", data=label, dtype=np.uint8)
                 total_count += 1
 
