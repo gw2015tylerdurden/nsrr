@@ -127,9 +127,9 @@ class ShhsDataLoader:
         # for save variable length signals in h5
         # pyedflib.readSignal returns float64, but original EDF has a 16 bit data format
         if target_fs is None:
-            dtype_variable_float = np.dtype('float16')
-        else:
             dtype_variable_float = h5py.special_dtype(vlen=np.dtype('float16'))
+        else:
+            dtype_variable_float = np.dtype('float16')
 
 
         for idx, (edf_file, xml_file) in enumerate(tqdm(zip(self.edf_files, self.xml_files), total=len(self.edf_files), desc="Processing files")):
