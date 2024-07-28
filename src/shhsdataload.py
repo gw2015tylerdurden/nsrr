@@ -304,7 +304,7 @@ class PreprocessResultPlotter:
             self.plots_interval = plots_interval
             self.channel_labels = channel_labels
 
-    def plot_and_save(self, total_count, fs_channels, target_fs, duration, annotation, extracted_signals, interpolated_signals, normalized_signals, output_format='png', dirname='debug_plot'):
+    def plot_and_save(self, total_count, fs_channels, target_fs, duration, annotation, extracted_signals, interpolated_signals, normalized_signals, output_format='pdf', dirname='debug_plot'):
         if not self.is_plot or total_count % self.plots_interval != 0:
             return
 
@@ -351,5 +351,5 @@ class PreprocessResultPlotter:
 
         # Save the plot inside the specified directory
         save_path = os.path.join(dirname, f"debug_plot_{total_count}.{output_format}")
-        plt.savefig(save_path, dpi=300)
+        plt.savefig(save_path)
         plt.close()
