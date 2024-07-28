@@ -123,6 +123,7 @@ class ShhsDataLoader:
         self.channel_labels = channel_labels
         self.annotation_counts = {label: 0 for label in self.annotation_labels}
         self.debug_plotter = PreprocessResultPlotter(debug_plots_interval, channel_labels)
+        os.makedirs(creation_dataset_path, exist_ok=True)
 
         for idx, (edf_file, xml_file) in enumerate(tqdm(zip(self.edf_files, self.xml_files), total=len(self.edf_files), desc="Processing files")):
             if idx % save_file_interval == 0:
@@ -144,7 +145,7 @@ class ShhsDataLoader:
             signal_list, label_list = self.__preprocessing(xml_file, fs_channels, signals, target_fs, total_count)
 
             # for save variable length signals in h5
-            # pyedflib.readSignal returns float64, but original EDF has a 16 bit data format 
+            # pyedflib.readSignal returns float64, but original EDF has a 16 bit data format
             dtype_variable_length_float = h5py.special_dtype(vlen=np.dtype('float16'))
             patient_no = f"{os.path.splitext(os.path.basename(edf_file))[0]}"
             for (signal, label) in zip(signal_list, label_list):
@@ -262,7 +263,7 @@ class ShhsDataLoader:
 
     def __extract_data(self, fs_channels, signals, start_time, count):
         extracted_data = []
-        
+
         for idx, fs in enumerate(fs_channels):
             start_idx = int(fs * (start_time + count * self.duration))
             end_idx = start_idx + int(fs * (self.duration))
@@ -284,7 +285,7 @@ class ShhsDataLoader:
         resampled_time = np.linspace(0, duration, int(target_fs * duration))
 
         for data, fs in zip(extracted_data, fs_channels):
-            time = np.arange(len(data)) / fs
+            time = np.linspace(0, duration, len(data))
             interpolated_data.append(self.interpolator.interpolate(data, time, resampled_time))
 
         return interpolated_data
