@@ -308,7 +308,8 @@ class PreprocessResultPlotter:
         if not self.is_plot or total_count % self.plots_interval != 0:
             return
 
-        self.time = [np.arange(len(data)) / fs for data, fs in zip(extracted_signals, fs_channels)]
+        #self.time = [np.arange(len(data)) / fs for data, fs in zip(extracted_signals, fs_channels)]
+        self.time = [np.linspace(0, duration, len(data)) for data in extracted_signals]
         if target_fs is not None:
             self.resampled_time = np.linspace(0, duration, int(target_fs * duration))
 
@@ -336,7 +337,8 @@ class PreprocessResultPlotter:
                 time = self.time[i]
             else:
                 time = self.resampled_time
-            axs[i, 0].plot(time, interpolated_signals[i], label='Interpolated Data', linestyle='--')
+
+            axs[i, 0].plot(time, interpolated_signals[i], label='Interpolated Data', alpha=0.7)
             axs[i, 0].set_title(f"Channel: {self.channel_labels[i]} (fs: {fs_channels[i]} Hz)")
             axs[i, 0].legend(loc='upper right')
 

@@ -22,7 +22,7 @@ fs_channels:    [1.0,       1.0,                                    125.0, 125.0
 output_shhs_datainfo_csv: False  # set True when first run
 debug_plots_interval: 200000 #None 
 duration: 30.0
-target_fs : 125
+#target_fs : 125
 interp : 'linear'
 seed: 1919
 lr: 5e-7
