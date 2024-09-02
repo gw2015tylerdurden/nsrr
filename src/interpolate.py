@@ -11,10 +11,8 @@ class Interpolator(ABC):
 
     @classmethod
     def get_instance(cls, method):
-        if method in ['cubic', 'linear']:
+        if method in ['cubic', 'linear', 'akima']:
             return Interpolator1d()
-        elif method == 'akima':
-            return Akima1DInterpolator()
         else:
             raise ValueError(f"Unknown interpolation method: {method}")
 
@@ -22,5 +20,8 @@ class Interpolator(ABC):
 class Interpolator1d(Interpolator):
 
     def interpolate(self, y, x, x_new, kind='linear'):
-        f = interp1d(x, y, kind=kind)
+        if kind == 'akima':
+            f = Akima1DInterpolator(x, y)
+        else:
+            f = interp1d(x, y, kind=kind)
         return f(x_new)
