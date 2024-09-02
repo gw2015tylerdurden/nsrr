@@ -1,4 +1,4 @@
-from scipy.interpolate import interp1d
+from scipy.interpolate import interp1d, Akima1DInterpolator
 from abc import ABC, abstractmethod
 import numpy as np
 
@@ -13,6 +13,8 @@ class Interpolator(ABC):
     def get_instance(cls, method):
         if method in ['cubic', 'linear']:
             return Interpolator1d()
+        elif method == 'akima':
+            return Akima1DInterpolator()
         else:
             raise ValueError(f"Unknown interpolation method: {method}")
 
