@@ -132,6 +132,30 @@ class ShhsDataset(Dataset):
         return balanced_data_map, dataset_indices, used_patients
 
 
+    def __collect_unbalanced_data(self, unbalanced_data_num, used_patients=set()):
+        unbalanced_data_map = defaultdict(list)
+        dataset_indices = []
+        total_events = len(self.annotation_labels) * unbalanced_data_num
+
+        for file, patient in self.dataset_patient_keys:
+            if patient in used_patients:
+                # for test
+                continue
+
+            for event in file[patient].keys():
+                label = file[patient][event]['label'][()]
+                dataset_indices.append(label)
+                unbalanced_data_map[(file, patient)].append(event)
+
+            used_patients.add(patient)
+
+            if len(dataset_indices) >= total_events:
+                break
+        print("unbalanced training dataset:", np.unique(dataset_indices, return_counts=True))
+        return unbalanced_data_map, dataset_indices, used_patients
+
+
+
     def __collect_balanced_data_immediately(self, balance_data_num, used_patients=set()):
         balanced_data_map = defaultdict(list)
         label_event_count = defaultdict(int, {label: 0 for label in range(len(self.annotation_labels))})
@@ -152,7 +176,7 @@ class ShhsDataset(Dataset):
                 break
         return balanced_data_map, used_patients
 
-    def balance_dataset(self, train_data_num=2000, test_data_num=1000):
+    def get_dataset(self, train_data_num=2000, test_data_num=1000, is_balanced_training_dataset=True):
         train_dataset = copy.copy(self)
         #validation_dataset = copy.copy(self)
         test_dataset = copy.copy(self)
@@ -161,8 +185,11 @@ class ShhsDataset(Dataset):
         test_keys = []
 
         np.random.shuffle(self.dataset_patient_keys)
-        train_balanced_data_map, train_dataset_indices, used_patients = self.__collect_balanced_data(train_data_num, set())
-        for (file, patient), events in train_balanced_data_map.items():
+        if is_balanced_training_dataset:
+            train_data_map, train_dataset_indices, used_patients = self.__collect_balanced_data(train_data_num, set())
+        else:
+            train_data_map, train_dataset_indices, used_patients = self.__collect_unbalanced_data(train_data_num, set())
+        for (file, patient), events in train_data_map.items():
             for event in events:
                 train_keys.append((file, patient, event))
 

@@ -18,8 +18,8 @@ class ModelTrainingRoutine(TrainingRoutineBase):
         self.test_itvl = args.test_itvl
         self.model_dir = args.model_dir
         self.is_debug = args.is_debug
-        self.balanced_train_num = args.balanced_train_num
-        self.balanced_test_num = args.balanced_test_num
+        self.train_data_num = args.train_data_num
+        self.test_data_num = args.test_data_num
         self.lr = args.lr
 
         self.channel_labels = channels
@@ -27,10 +27,12 @@ class ModelTrainingRoutine(TrainingRoutineBase):
         self.annotation_labels = annotation_labels
         self.num_kfolds = args.num_kfolds
         self.kfold = StratifiedKFold(n_splits=args.num_kfolds, shuffle=True, random_state=args.seed)
+        self.is_balanced_training_dataset = args.is_balanced_training_dataset
 
 
     def run(self, dataset, args, num_epoch, batch_size, loop):
-        train_dataset, train_dataset_indices, test_dataset = dataset.balance_dataset(self.balanced_train_num, self.balanced_test_num)
+        train_dataset, train_dataset_indices, test_dataset = dataset.get_dataset(self.train_data_num, self.test_data_num, self.is_balanced_training_dataset)
+
         test_loader = torch.utils.data.DataLoader(
                 test_dataset,
                 batch_size=batch_size,

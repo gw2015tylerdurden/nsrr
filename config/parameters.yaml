@@ -1,13 +1,13 @@
 hydra:
   run:
-    dir: outputs/seed${seed}
+    dir: outputs/unbalanced-seed${seed}
 model_dir: ./models/
 
 original_dataset_path: ~/workspace/nsrr/shhs/polysomnography/
-#creation_dataset_path: ~/workspace/nsrr/data13ch/
+creation_dataset_path: ~/workspace/nsrr/data13ch/
 #creation_dataset_path: ~/workspace/nsrr/data-13ch-interp-linear/
 #creation_dataset_path: ~/workspace/nsrr/data-13ch-interp-cubic/
-creation_dataset_path: ~/workspace/nsrr/data-13ch-interp-akima/
+#creation_dataset_path: ~/workspace/nsrr/data-13ch-interp-akima/
 
 verbose: True
 is_debug: False
@@ -24,15 +24,16 @@ fs_channels:    [1.0,       1.0,                                    125.0, 125.0
 output_shhs_datainfo_csv: False  # set True when first run
 debug_plots_interval: 200000 #None 
 duration: 30.0
-target_fs : 125
-interp : 'akima'
+#target_fs : 125
+#interp : 'akima'
 seed: 101
 lr: 5e-7
 num_epoch: 300
 num_kfolds: 5
 
-balanced_train_num: 2000
-balanced_test_num: 1000
+is_balanced_training_dataset: False
+train_data_num: 2000
+test_data_num: 1000
 
 batch_size: 100
 num_train_step: 100
@@ -43,6 +44,6 @@ gpu: 0
 
 wandb:
   project: nsrr
-  group: akima-seed${seed}
-  name: interp
+  group: unbalanced-seed${seed}
+  name: unbalanced
   cwd: current_work_directory
