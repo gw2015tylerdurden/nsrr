@@ -9,13 +9,20 @@ from .utils import remove_padding_data
 
 matplotlib.use('Agg')
 
-def plot_confusion_matrix(y_true, y_pred, classes, accuracy, epoch, title=None, cmap=plt.cm.Blues):
+def plot_confusion_matrix(y_true, y_pred, classes, accuracy, epoch, title=None, cmap=plt.cm.Greens):
     if not title:
         title = f'Confusion matrix (Accuracy: {accuracy:.2f}%)'
 
     # Compute confusion matrix
     cm = confusion_matrix(y_true, y_pred)
-    cm_normalized = normalize(cm, axis=0, norm='l1')
+
+    # insert REM between Wake and Stage 1
+    if True:
+        new_order = [0, 5, 1, 2, 3, 4]
+        classes = ['Wake', 'REM', 'Stage 1', 'Stage 2', 'Stage 3', 'Stage 4']
+        cm = cm[new_order, :]
+        cm = cm[:, new_order]
+    cm_normalized = normalize(cm, axis=1, norm='l1')
 
     annot = np.vectorize(lambda x: f'{x:.1%}' if x != 0 else '')(cm_normalized)
 
