@@ -114,15 +114,14 @@ class ShhsDataset(Dataset):
                 label = file[patient][event]['label'][()]
                 patient_events[label].append(event)
 
-            min_events = min(len(events) for events in patient_events.values())
+            for label, events in patient_events.items():
+                for event in events:
+                    if label_event_count[label] >= balance_data_num:
+                        break
 
-            if min_events > 0:
-                for label, events in patient_events.items():
-                    selected_events = random.sample(events, min_events)
-                    for event in selected_events:
-                        balanced_data_map[(file, patient)].append(event)
-                        dataset_indices.append(label)
-                        label_event_count[label] += 1
+                    balanced_data_map[(file, patient)].append(event)
+                    dataset_indices.append(label)
+                    label_event_count[label] += 1
 
             used_patients.add(patient)
 
