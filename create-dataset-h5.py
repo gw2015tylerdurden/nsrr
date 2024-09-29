@@ -9,7 +9,7 @@ def main(args):
                           datasets=args.datasets,
                           output_csv=args.output_shhs_datainfo_csv,
                           verbose=args.verbose,
-                          interp=args.interp)
+                          upsampling=args.upsampling)
 
     if args.output_shhs_datainfo_csv is True:
         shhs.generate_annot_counts_csv()

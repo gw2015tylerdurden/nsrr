@@ -2,7 +2,7 @@ import os
 import glob
 import csv
 from xml.etree import ElementTree
-from src.interpolate import Interpolator
+from src.resample import Resample
 from src.normalize import Normalizer
 import pyedflib
 import numpy as np
@@ -15,12 +15,12 @@ from omegaconf import ListConfig
 
 
 class ShhsDataLoader:
-    def __init__(self, annotation_labels, base_path='./shhs/polysomnography/', datasets=['shhs1', 'shhs2'],  interp='linear', norm='standard', annot='nsrr', output_csv=False, verbose=True):
+    def __init__(self, annotation_labels, base_path='./shhs/polysomnography/', datasets=['shhs1', 'shhs2'],  upsampling='linear', norm='standard', annot='nsrr', output_csv=False, verbose=True):
         self.annotation_labels = annotation_labels
         self.verbose = verbose
         self.edf_files = []
         self.xml_files = []
-        self.interpolator = Interpolator.get_instance(interp)
+        self.resample = Resample.get_instance(upsampling)
         self.normalizer = Normalizer.get_instance(norm)
         self.duration = 30.0
 
@@ -197,7 +197,7 @@ class ShhsDataLoader:
                         #after_fs_signals = self.__padding_signals(extracted_signals)
                         after_fs_signals = extracted_signals
                     else:
-                        after_fs_signals = self.__interpolate_data(fs_channels, extracted_signals, self.duration, target_fs)
+                        after_fs_signals = self.__upsample_data(fs_channels, extracted_signals, self.duration, target_fs)
                     normalized_signals = [self.normalizer.normalize(signal) for signal in after_fs_signals]
 
                     label_idx = self.annotation_labels.index(annotation)
@@ -284,15 +284,15 @@ class ShhsDataLoader:
         return extracted_data
 
 
-    def __interpolate_data(self, fs_channels, extracted_data, duration, target_fs):
-        interpolated_data = []
+    def __upsample_data(self, fs_channels, extracted_data, duration, target_fs):
+        resampled_data = []
         resampled_time = np.linspace(0, duration, int(target_fs * duration))
 
         for data, fs in zip(extracted_data, fs_channels):
             time = np.linspace(0, duration, len(data))
-            interpolated_data.append(self.interpolator.interpolate(data, time, resampled_time))
+            resampled_data.append(self.resample.upsampling(data, time, resampled_time, fs, target_fs))
 
-        return interpolated_data
+        return resampled_data
 
 
 class PreprocessResultPlotter:
