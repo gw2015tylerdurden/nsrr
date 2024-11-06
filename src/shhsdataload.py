@@ -192,13 +192,12 @@ class ShhsDataLoader:
 
                 for count in range(num_iterations):
                     extracted_signals = self.__extract_data(fs_channels, signals, start_time, count)
-
+                    normalized_signals = [self.normalizer.normalize(signal) for signal in extracted_signals]
                     if target_fs is None:
                         #after_fs_signals = self.__padding_signals(extracted_signals)
-                        after_fs_signals = extracted_signals
+                        after_fs_signals = normalized_signals
                     else:
-                        after_fs_signals = self.__upsample_data(fs_channels, extracted_signals, self.duration, target_fs)
-                    normalized_signals = [self.normalizer.normalize(signal) for signal in after_fs_signals]
+                        after_fs_signals = self.__upsample_data(fs_channels, normalized_signals, self.duration, target_fs)
 
                     label_idx = self.annotation_labels.index(annotation)
                     label_list.append(label_idx)
