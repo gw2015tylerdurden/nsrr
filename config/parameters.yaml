@@ -17,7 +17,7 @@ datasets: ['shhs1', 'shhs2']
 
 # https://github.com/nsrr/edf-editor-translator/blob/master/configuration/nsrr-psg-events-compumedics-mapping.csv
 annotation_labels: ['Wake', 'Stage 1 sleep', 'Stage 2 sleep', 'Stage 3 sleep', 'Stage 4 sleep', 'REM sleep']
-channel_labels: ['SaO2', 'H.R.', ['EEG(sec)', 'EEG 2', 'EEG2', 'EEG sec'], 'EEG', 'ECG', 'EOG(L)', 'EOG(R)', 'EMG', 'THOR RES', 'ABDO RES', 'POSITION', 'LIGHT', 'NEW AIR']
+channel_labels: ['SaO2', ['H.R.', 'PR'], ['EEG(sec)', 'EEG 2', 'EEG2', 'EEG sec'], 'EEG', 'ECG', 'EOG(L)', 'EOG(R)', 'EMG', 'THOR RES', 'ABDO RES', 'POSITION', 'LIGHT', ['AIRFLOW', 'NEW AIR']]
 #add_noise_channel_fs: [1.0, 10.0, 50.0, 125.0, 250.0]
 add_noise_channel_fs: []
 fs_channels:    [1.0,       1.0,                                    125.0, 125.0, 125.0,     50.0,     50.0, 125.0,       10.0,       10.0,        1.0,     1.0,      10.0]
@@ -37,7 +37,7 @@ is_balanced_training_dataset: True
 train_data_num: 23000
 test_data_num: 5000
 
-batch_size: 200
+batch_size: 150
 num_train_step: 100
 save_itvl: 5 #50
 test_itvl: 5

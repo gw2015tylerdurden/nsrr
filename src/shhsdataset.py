@@ -101,8 +101,11 @@ class ShhsDataset(Dataset):
 
     def __collect_balanced_data(self, balance_data_num, used_patients=set()):
         balanced_data_map = defaultdict(list)
-        label_event_count = defaultdict(int, {label: 0 for label in range(len(self.annotation_labels))})
         dataset_indices = []
+
+        all_patient_events = []
+        all_labels = []
+        label_event_count = defaultdict(int, {label: 0 for label in range(len(self.annotation_labels))})
 
         for file, patient in self.dataset_patient_keys:
             if patient in used_patients:
@@ -116,17 +119,23 @@ class ShhsDataset(Dataset):
 
             for label, events in patient_events.items():
                 for event in events:
-                    if label_event_count[label] >= balance_data_num:
-                        break
-
-                    balanced_data_map[(file, patient)].append(event)
-                    dataset_indices.append(label)
+                    all_patient_events.append((file, patient, event))
+                    all_labels.append(label)
                     label_event_count[label] += 1
 
             used_patients.add(patient)
 
             if all(count >= balance_data_num for count in label_event_count.values()):
                 break
+
+        for label in range(len(self.annotation_labels)):
+            label_indices = np.where(np.array(all_labels) == label)[0]
+            sampled_indices = random.sample(list(label_indices), balance_data_num)
+
+            for idx in sampled_indices:
+                file, patient, event = all_patient_events[idx]
+                balanced_data_map[(file, patient)].append(event)
+                dataset_indices.append(label)
 
         return balanced_data_map, dataset_indices, used_patients
 

@@ -9,7 +9,7 @@ from .utils import remove_padding_data
 
 matplotlib.use('Agg')
 
-def plot_confusion_matrix(y_true, y_pred, classes, accuracy, epoch, title=None, cmap=plt.cm.Greens):
+def plot_confusion_matrix(y_true, y_pred, classes, accuracy, epoch, title=None, cmap=plt.cm.Purples):
     if not title:
         title = f'Confusion matrix (Accuracy: {accuracy:.2f}%)'
 
