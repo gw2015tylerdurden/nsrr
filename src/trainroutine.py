@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import random
 import torch
 from tqdm import tqdm
 from .base import TrainingRoutineBase
@@ -25,8 +26,13 @@ class ModelTrainingRoutine(TrainingRoutineBase):
         self.channel_labels = channels
         self.fs_channels = fs_channels
         self.annotation_labels = annotation_labels
-        self.num_kfolds = args.num_kfolds
-        self.kfold = StratifiedKFold(n_splits=args.num_kfolds, shuffle=True, random_state=args.seed)
+
+        if args.num_kfolds == -1:
+            self.num_kfolds = 2
+            self.is_holdout = True
+        else:
+            self.is_holdout = False
+        self.kfold = StratifiedKFold(n_splits=self.num_kfolds, shuffle=True, random_state=args.seed)
         self.is_balanced_training_dataset = args.is_balanced_training_dataset
 
 
@@ -44,8 +50,21 @@ class ModelTrainingRoutine(TrainingRoutineBase):
 
         best_valid_fold_models = [None] * self.num_kfolds
         for fold, (train_idx, valid_idx) in enumerate(self.kfold.split(list(range(len(train_dataset_indices))), train_dataset_indices)):
-            print(f'[LOG] Fold {fold+1}/{self.num_kfolds}')
-            self.wandb_init(args, string=f"loop{loop+1}_fold{fold+1}")
+            if self.is_holdout:
+                if fold == 1:
+                    break
+                print(f'[LOG] Foldout')
+                random.shuffle(train_dataset_indices)
+                # validation for 15 % random
+                val_size = int(len(train_dataset_indices) * 0.15)
+                valid_idx = train_dataset_indices[:val_size]
+                train_idx = train_dataset_indices[val_size:]
+                print(f"Total samples: {len(train_dataset_indices)}")
+                print(f"Train: {len(train_idx)}, Valid: {len(valid_idx)}")
+                self.wandb_init(args, string=f"loop{loop+1}_foldout")
+            else:
+                print(f'[LOG] Fold {fold+1}/{self.num_kfolds}')
+                self.wandb_init(args, string=f"loop{loop+1}_fold{fold+1}")
 
             self.set_model(ModelCNN(num_classes=len(self.annotation_labels),
                                     fs_channels=self.fs_channels).model_instance,
@@ -156,6 +175,7 @@ class ModelTrainingRoutine(TrainingRoutineBase):
                     best_valid_fold_models[fold] = best_model_file
                     torch.save(self.model.state_dict(),  best_model_file)
                     print(f"[LOG] Model parameters are saved to {best_model_file}.")
+                    
 
             self.wandb.finish()
 
