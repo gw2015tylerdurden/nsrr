@@ -54,11 +54,12 @@ class ModelTrainingRoutine(TrainingRoutineBase):
                 if fold == 1:
                     break
                 print(f'[LOG] Foldout')
-                random.shuffle(train_dataset_indices)
                 # validation for 15 % random
                 val_size = int(len(train_dataset_indices) * 0.15)
-                valid_idx = train_dataset_indices[:val_size]
-                train_idx = train_dataset_indices[val_size:]
+                foldout = list(range(len(train_dataset_indices)))
+                random.shuffle(foldout)
+                train_idx = foldout[val_size:]
+                valid_idx = foldout[:val_size]
                 print(f"Total samples: {len(train_dataset_indices)}")
                 print(f"Train: {len(train_idx)}, Valid: {len(valid_idx)}")
                 self.wandb_init(args, string=f"loop{loop+1}_foldout")
