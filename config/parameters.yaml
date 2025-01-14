@@ -1,7 +1,7 @@
-dir_name: icicic
+dir_name: cam
 hydra:
   run:
-    dir: outputs/${dir_name}-seed${seed}
+    dir: outputs/${dir_name}/seed${seed}
 model_dir: ./models/
 
 original_dataset_path: ~/workspace/nsrr/shhs/polysomnography/
@@ -30,15 +30,15 @@ duration: 30.0
 seed: 100
 lr: 5e-7
 num_epoch: 300
-num_kfolds: 5
+num_kfolds: -1
 
 is_balanced_training_dataset: True
 
-train_data_num: 23000
-test_data_num: 5000
+# after signal selected
+train_data_num: 24000
+test_data_num: 4000
 
-batch_size: 150
-num_train_step: 100
+batch_size: 400
 save_itvl: 5 #50
 test_itvl: 5
 
@@ -46,6 +46,7 @@ gpu: 1
 
 wandb:
   project: nsrr
+  entity: tylerdurden
   group: ${dir_name}-seed${seed}
   name: trial
   cwd: current_work_directory

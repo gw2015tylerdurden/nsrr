@@ -4,7 +4,15 @@ from collections import defaultdict, abc
 class WandbLogging:
     def __init__(self, args, string=None):
         self.stats = defaultdict(list)
-        wandb.init(project=args.wandb.project, group=args.wandb.group)
+        wandb_kwargs = {
+        "project": args.wandb.project,
+        "group": args.wandb.group
+        }
+    
+        if hasattr(args.wandb, "entity"):
+            wandb_kwargs["entity"] = args.wandb.entity
+        wandb.init(**wandb_kwargs)
+
         if string is not None:
             wandb.run.name = string
         else:
