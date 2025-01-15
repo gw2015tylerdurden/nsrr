@@ -31,6 +31,7 @@ class ModelTrainingRoutine(TrainingRoutineBase):
             self.num_kfolds = 2
             self.is_holdout = True
         else:
+            self.num_kfolds = args.num_kfolds
             self.is_holdout = False
         self.kfold = StratifiedKFold(n_splits=self.num_kfolds, shuffle=True, random_state=args.seed)
         self.is_balanced_training_dataset = args.is_balanced_training_dataset
@@ -184,6 +185,8 @@ class ModelTrainingRoutine(TrainingRoutineBase):
         all_fold_predictions = []
         all_fold_true_labels = []
         for fold in range(len(best_valid_fold_models)):
+            if best_valid_fold_models[fold] is None:
+                break
             reload_model = ModelCNN(len(self.annotation_labels), self.fs_channels).model_instance
             reload_model.load_state_dict(torch.load(best_valid_fold_models[fold]))
             self.model.eval()

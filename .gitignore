@@ -1,9 +1,12 @@
+*DS_Store*
 *.h5
-pytorch_gra_cam/
+pytorch_grad_cam/
 *.pdf
 *.npy
 nohup.out
 *.csv
+*.svg
+__pycache__/
 outputs/
 data13/
 data-13ch-interp-linear/
