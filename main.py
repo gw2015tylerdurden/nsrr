@@ -11,6 +11,7 @@ def main(args):
     DeterministicSeed(seed_num=args.seed)
 
     pop_channels = []
+    accuracies = []
     h5_files = glob.glob(os.path.expanduser(args.creation_dataset_path) + '*.h5')
 
     loop_count = 0
@@ -26,12 +27,14 @@ def main(args):
 
         routine = ModelTrainingRoutine(fs_channels, channels, annotation_labels, args)
 
-        s_min_idx, s_max_idx = routine.run(dataset,
+        s_min_idx, s_max_idx, accuracy = routine.run(dataset,
                                            args,
                                            args.num_epoch,
                                            args.batch_size,
                                            loop_count)
+        accuracies.append(accuracies)
         pop_channels.append(channels[s_min_idx])
+        print(pop_channels)
 
         if len(fs_channels) == 1:
             # Can't pop any more signals
@@ -43,7 +46,8 @@ def main(args):
         os.chdir("..")
 
     with open("pop_channels.txt", "w") as file:
-        file.write(pop_channels)
+        file.write(repr(pop_channels))
+        file.write(repr(accuracies))
 
 if __name__ == '__main__':
     main()

@@ -73,8 +73,13 @@ def plot_cam_1d(inputs, labels, cams, annotation, channel_labels, fs_channels, f
 
     for label_idx in indices:
         fig, axs = plt.subplots(channel_num, 1, figsize=(18, 2 * channel_num))
+        axs = np.atleast_1d(axs)  # for only final channel
+        
         data = inputs[label_idx].squeeze()
         all_channel_cam = cams[:, label_idx, :].squeeze()
+        # for only final channel
+        if all_channel_cam.ndim == 1:
+            all_channel_cam = np.expand_dims(all_channel_cam, axis=0)  # shape (1, y)
 
         for i in range(channel_num):
             input_data = remove_padding_data(data[i]).detach().cpu().numpy()

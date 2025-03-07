@@ -186,7 +186,8 @@ class ModelTrainingRoutine(TrainingRoutineBase):
         all_fold_true_labels = []
         for fold in range(len(best_valid_fold_models)):
             if best_valid_fold_models[fold] is None:
-                break
+                best_valid_fold_models.pop(fold)
+                continue
             reload_model = ModelCNN(len(self.annotation_labels), self.fs_channels).model_instance
             reload_model.load_state_dict(torch.load(best_valid_fold_models[fold]))
             self.model.eval()
@@ -218,4 +219,4 @@ class ModelTrainingRoutine(TrainingRoutineBase):
         cam_calc.plot_cam(test_loader)
         s_min_idx, s_max_idx = cam_calc.calc_sim_result(test_loader)
 
-        return s_min_idx, s_max_idx
+        return s_min_idx, s_max_idx, accuracy
