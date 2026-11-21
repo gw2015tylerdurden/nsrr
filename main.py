@@ -32,7 +32,7 @@ def main(args):
                                            args.num_epoch,
                                            args.batch_size,
                                            loop_count)
-        accuracies.append(accuracies)
+        accuracies.append(accuracy)
         pop_channels.append(channels[s_min_idx])
         print(pop_channels)
 
